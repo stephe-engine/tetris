@@ -350,7 +350,6 @@ GameObject:
   m_Component:
   - component: {fileID: 1762498803}
   - component: {fileID: 1762498802}
-  - component: {fileID: 1762498804}
   - component: {fileID: 1762498805}
   m_Layer: 0
   m_Name: Board
@@ -433,18 +432,6 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &1762498804
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1762498801}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 202d499bad4876a41823b1b74d9b2db8, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: '::'
 --- !u!114 &1762498805
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -459,6 +446,13 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Board
   width: 10
   height: 20
+  spriteI: {fileID: 21300000, guid: a78829c9f8116cf42b5f0fb1b09be313, type: 3}
+  spriteO: {fileID: 21300000, guid: d4d464255adb8b3489f667a17e72b2a3, type: 3}
+  spriteT: {fileID: 21300000, guid: a4dd387ce6156d84786bddbd2663dedc, type: 3}
+  spriteS: {fileID: 21300000, guid: 77d5df1666ec9af4eac2e164b4b087da, type: 3}
+  spriteZ: {fileID: 21300000, guid: 5b3a1c4f2d2e1f846a6e76cd2c5aa23b, type: 3}
+  spriteJ: {fileID: 21300000, guid: c2f38c4522c6cb2418e1e818cede3cdb, type: 3}
+  spriteL: {fileID: 21300000, guid: e5064ab11d903d640a3f08b65fe22c08, type: 3}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

@@ -103,3 +103,6 @@ InitTestScene*.unity*
 
 # Jetbrains project folder
 .idea/
+
+# Claude Folder
+.claude/

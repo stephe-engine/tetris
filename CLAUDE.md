@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Unity 6 (6000.3.8f1) Tetris clone — a 2D puzzle game built with the Universal Render Pipeline (URP) in 2D mode. The project is in early stages with scaffolding in place but minimal gameplay code.
+Unity 6 (6000.3.8f1) Tetris clone — a 2D puzzle game built with the Universal Render Pipeline (URP) in 2D mode.
 
 ## Build and Development
 
@@ -17,11 +17,27 @@ This is a Unity project — it is opened and built through the Unity Editor, not
 
 ## Architecture
 
-- **`Assets/Project/Scripts/`** — All game scripts (MonoBehaviour components). Currently only `Grid.cs`.
-- **`Assets/Project/Scenes/SampleScene.unity`** — Main game scene with a Grid GameObject and 2D camera.
-- **`Assets/Project/Sprites/`** — Game sprites (grid graphic).
+- **`Assets/Project/Scripts/`** — All game scripts in the `Project.Scripts` namespace.
+  - `Board.cs` — Main game board controller. Manages the 10x20 grid, spawns pieces, validates positions.
+  - `Piece.cs` — Active falling tetromino. Manages grid position, cell offsets, and renders via child SpriteRenderer GameObjects.
+  - `TetrominoData.cs` — Static data: `Tetromino` enum (7 piece types), `Data` class (cell offsets, spawn position).
+- **`Assets/Project/Scenes/SampleScene.unity`** — Main game scene with Board GameObject (at 4.5, 9.5) and 2D camera.
+- **`Assets/Project/Sprites/`** — Game sprites (Grid.png used as tiled board background).
 - **`Assets/Project/Prefabs/`** — Reusable prefabs (empty, to be populated).
-- **`Assets/Plugins/Chess Studio/Puzzle Blocks Icon Pack/`** — Asset Store block sprites (100+ colored block textures for Tetris pieces).
+- **`Assets/Plugins/Chess Studio/Puzzle Blocks Icon Pack/`** — Asset Store block sprites. Using the "Stone" variants (e.g. `lightBlueStone.png`, `redStone.png`) for tetromino blocks.
+
+### Scene Structure
+
+```
+Board (world pos 4.5, 9.5)         — SpriteRenderer (tiled Grid.png, 10x20)
+  └── Piece (runtime child)         — Piece.cs component
+        ├── Block 0                  — SpriteRenderer (colored block sprite)
+        ├── Block 1
+        ├── Block 2
+        └── Block 3
+```
+
+The Board's local origin is the center of the grid. Grid bounds are x: -5 to 5, y: -10 to 10. Grid cell edges sit at integer positions; cell centers are at half-integer positions (blocks offset by +0.5 on both axes).
 
 ## Key Packages
 
@@ -32,7 +48,15 @@ This is a Unity project — it is opened and built through the Unity Editor, not
 
 ## Conventions
 
+### Project Structure
 - Game scripts go in `Assets/Project/Scripts/`.
 - Prefabs go in `Assets/Project/Prefabs/`.
 - Rendering settings are in `Assets/Project/Settings/` (Renderer2D.asset, UniversalRP.asset).
 - Files under `Library/`, `Temp/`, `obj/` are auto-generated and git-ignored.
+
+### C# Coding Style
+- **Namespace:** All scripts use `namespace Project.Scripts`.
+- **Explicit types:** Use explicit types, not `var` (Unity convention). Exception: `new()` target-typed expressions are fine (e.g. `Vector2 offset = new(0.5f, 0.5f)`).
+- **Private field naming:** Plain `camelCase` with no underscore prefix (Unity convention). E.g. `cells`, `activePiece`, `spriteI`.
+- **XML documentation:** All public types and members use `///` XML doc comments (`<summary>`, `<param>`, `<returns>`, `<see cref=""/>`).
+- **No constructors on MonoBehaviours:** Use `Initialize()` methods instead. Unity creates MonoBehaviours internally.
