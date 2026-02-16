@@ -26,6 +26,9 @@ namespace Project.Scripts
 
         private GameObject[] blocks;
 
+        /// <summary>The child block GameObjects (one per cell). Used by <see cref="Board"/> to reparent blocks during locking.</summary>
+        public GameObject[] Blocks => blocks;
+
         /// <summary>
         /// Initializes the piece with a shape, grid position, and sprite.
         /// Creates 4 child GameObjects, each with a <see cref="SpriteRenderer"/>,

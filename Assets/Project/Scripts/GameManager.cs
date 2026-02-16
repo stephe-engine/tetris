@@ -18,6 +18,7 @@ namespace Project.Scripts
 
         private float stepTimer;
         private bool gravityEnabled = true;
+        private bool gameOver;
 
         private void Start()
         {
@@ -26,7 +27,7 @@ namespace Project.Scripts
 
         private void Update()
         {
-            if (!gravityEnabled)
+            if (gameOver || !gravityEnabled)
                 return;
 
             stepTimer += Time.deltaTime;
@@ -61,9 +62,15 @@ namespace Project.Scripts
 
             if (!moved)
             {
-                // Piece has landed — spawn the next one
-                // TODO: lock piece cells into the board grid before spawning
+                board.LockPiece();
+                board.ClearLines();
                 board.SpawnPiece();
+
+                if (!IsActivePieceValid())
+                {
+                    gameOver = true;
+                    Debug.Log("Game Over");
+                }
             }
         }
 
@@ -75,6 +82,9 @@ namespace Project.Scripts
         /// <param name="command">The command to execute.</param>
         public void ExecuteCommand(GameCommand command)
         {
+            if (gameOver)
+                return;
+
             switch (command)
             {
                 case GameCommand.MoveLeft:
@@ -192,6 +202,29 @@ namespace Project.Scripts
 
             // All 5 kick tests failed — rotation is blocked
             return false;
+        }
+
+        /// <summary>
+        /// Checks whether the active piece's cells all occupy valid board positions.
+        /// Used after spawning to detect game over (top-out).
+        /// </summary>
+        /// <returns>True if every cell is within bounds and unoccupied; false otherwise.</returns>
+        private bool IsActivePieceValid()
+        {
+            Piece piece = board.ActivePiece;
+
+            if (!piece)
+                return false;
+
+            for (int i = 0; i < piece.Cells.Length; i++)
+            {
+                Vector2Int cellPosition = piece.Position + piece.Cells[i];
+
+                if (!board.IsValidPosition(cellPosition))
+                    return false;
+            }
+
+            return true;
         }
     }
 }

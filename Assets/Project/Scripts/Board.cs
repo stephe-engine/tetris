@@ -19,7 +19,10 @@ namespace Project.Scripts
         [SerializeField] private Sprite spriteJ;
         [SerializeField] private Sprite spriteL;
 
+        private static readonly Vector2 CellCenterOffset = new(0.5f, 0.5f);
+
         private int[,] cells;
+        private GameObject[,] lockedBlocks;
         private Piece activePiece;
 
         /// <summary>The currently active (falling) piece, or null if none.</summary>
@@ -41,21 +44,16 @@ namespace Project.Scripts
         private void Awake()
         {
             cells = new int[width, height];
+            lockedBlocks = new GameObject[width, height];
         }
 
         /// <summary>
         /// Spawns a new random tetromino at the default spawn position.
-        /// Destroys any existing active piece before creating the new one.
         /// </summary>
         public void SpawnPiece()
         {
             Tetromino type = (Tetromino) Random.Range(0, System.Enum.GetValues(typeof(Tetromino)).Length);
             Sprite sprite = GetSpriteForTetromino(type);
-
-            if (activePiece)
-            {
-                Destroy(activePiece.gameObject);
-            }
 
             GameObject pieceObject = new GameObject("Piece");
             pieceObject.transform.SetParent(transform, false);
@@ -102,6 +100,100 @@ namespace Project.Scripts
             int y = position.y - bounds.yMin;
 
             return cells[x, y] == 0;
+        }
+
+        /// <summary>
+        /// Locks the active piece into the board grid. Writes cell values,
+        /// reparents block GameObjects from the Piece to the Board, and
+        /// destroys the now-empty Piece GameObject.
+        /// </summary>
+        public void LockPiece()
+        {
+            if (!activePiece)
+                return;
+
+            RectInt bounds = Bounds;
+
+            for (int i = 0; i < activePiece.Cells.Length; i++)
+            {
+                Vector2Int gridPos = activePiece.Position + activePiece.Cells[i];
+                int x = gridPos.x - bounds.xMin;
+                int y = gridPos.y - bounds.yMin;
+
+                cells[x, y] = 1;
+
+                GameObject block = activePiece.Blocks[i];
+                block.transform.SetParent(transform, true);
+                lockedBlocks[x, y] = block;
+            }
+
+            Destroy(activePiece.gameObject);
+            activePiece = null;
+        }
+
+        /// <summary>
+        /// Detects and clears fully occupied rows, then collapses rows above
+        /// downward to fill the gaps.
+        /// </summary>
+        /// <returns>The number of lines cleared.</returns>
+        public int ClearLines()
+        {
+            RectInt bounds = Bounds;
+            int linesCleared = 0;
+
+            // Scan from bottom to top
+            for (int row = 0; row < height; row++)
+            {
+                bool full = true;
+
+                for (int col = 0; col < width; col++)
+                {
+                    if (cells[col, row] == 0)
+                    {
+                        full = false;
+                        break;
+                    }
+                }
+
+                if (full)
+                {
+                    // Destroy all blocks in this row
+                    for (int col = 0; col < width; col++)
+                    {
+                        Destroy(lockedBlocks[col, row]);
+                        lockedBlocks[col, row] = null;
+                        cells[col, row] = 0;
+                    }
+
+                    // Shift all rows above this one down by one
+                    for (int aboveRow = row + 1; aboveRow < height; aboveRow++)
+                    {
+                        for (int col = 0; col < width; col++)
+                        {
+                            cells[col, aboveRow - 1] = cells[col, aboveRow];
+                            cells[col, aboveRow] = 0;
+
+                            lockedBlocks[col, aboveRow - 1] = lockedBlocks[col, aboveRow];
+                            lockedBlocks[col, aboveRow] = null;
+
+                            if (lockedBlocks[col, aboveRow - 1])
+                            {
+                                Vector2 newPos = new Vector2(
+                                    col + bounds.xMin,
+                                    aboveRow - 1 + bounds.yMin
+                                ) + CellCenterOffset;
+                                lockedBlocks[col, aboveRow - 1].transform.localPosition = newPos;
+                            }
+                        }
+                    }
+
+                    // Re-check the same row index since a new row shifted into it
+                    row--;
+                    linesCleared++;
+                }
+            }
+
+            return linesCleared;
         }
 
         /// <summary>

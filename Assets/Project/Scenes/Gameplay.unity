@@ -287,8 +287,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Project.Scripts.InputHandler
   gameManager: {fileID: 549729090}
-  dasDelay: 0.17
-  arrRate: 0.05
+  holdDelay: 0.17
+  holdRepeatRate: 0.05
 --- !u!114 &549729090
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -302,7 +302,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Project.Scripts.GameManager
   board: {fileID: 1762498805}
-  stepDelay: 1
+  stepDelay: 0.5
 --- !u!4 &549729091
 Transform:
   m_ObjectHideFlags: 0
