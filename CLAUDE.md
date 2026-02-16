@@ -18,7 +18,10 @@ This is a Unity project — it is opened and built through the Unity Editor, not
 ## Architecture
 
 - **`Assets/Project/Scripts/`** — All game scripts in the `Project.Scripts` namespace.
-  - `Board.cs` — Main game board controller. Manages the 10x20 grid, spawns pieces, validates positions. Line clearing is split into `FindFullRows()` (detection), `FlashRows()` (coroutine blink animation), and `ClearAndCollapseRows()` (destroy + collapse). Flash timing is Inspector-tunable (`flashDuration`, `flashCount`). Also owns the ghost piece preview — `UpdateGhostPiece()` calculates the hard-drop destination and renders translucent blocks there; `ClearGhostPiece()` removes it during locking. Ghost alpha is Inspector-tunable (`ghostAlpha`).
+  - `Board.cs` — Main game board controller. Manages the 10x20 grid, spawns pieces, validates positions. Piece selection is delegated to a `SpawnStrategy` ScriptableObject (Inspector-assignable). Line clearing is split into `FindFullRows()` (detection), `FlashRows()` (coroutine blink animation), and `ClearAndCollapseRows()` (destroy + collapse). Flash timing is Inspector-tunable (`flashDuration`, `flashCount`). Also owns the ghost piece preview — `UpdateGhostPiece()` calculates the hard-drop destination and renders translucent blocks there; `ClearGhostPiece()` removes it during locking. Ghost alpha is Inspector-tunable (`ghostAlpha`).
+  - `SpawnStrategy.cs` — Abstract `ScriptableObject` base class for tetromino spawn strategies. Defines `Next()` (returns the next `Tetromino`) and `Reset()` (clears internal state for new games).
+  - `BagRandomStrategy.cs` — Standard 7-bag spawn strategy. All 7 piece types are shuffled into a bag and dealt one at a time; the bag refills when empty. Prevents piece droughts. Default strategy on the Board.
+  - `SimpleRandomStrategy.cs` — Uniform random spawn strategy. Picks any piece with equal probability each time (original behavior). No drought protection.
   - `Piece.cs` — Active falling tetromino. Manages grid position, cell offsets, rotation state (`RotationIndex` 0–3), and renders via child SpriteRenderer GameObjects.
   - `TetrominoData.cs` — Static data: `Tetromino` enum (7 piece types), `Data` class (cell offsets, spawn position, rotation states, SRS wall kick tables).
   - `GameCommand.cs` — Enum of commands (MoveLeft, MoveRight, SoftDrop, HardDrop, RotateClockwise, RotateCounterClockwise). Abstraction boundary between input and game logic.
@@ -27,6 +30,7 @@ This is a Unity project — it is opened and built through the Unity Editor, not
 - **`Assets/Project/Input/`** — Input configuration.
   - `TetrisInput.inputactions` — Unity Input System action definitions. Gameplay map: MoveLeft, MoveRight, SoftDrop, HardDrop, RotateClockwise, RotateCounterClockwise. Debug map: ToggleGravity (editor-only). Supports rebinding.
   - `TetrisInput.cs` — Auto-generated C# wrapper (do not edit manually).
+- **`Assets/Project/ScriptableObjects/`** — ScriptableObject assets (spawn strategies, etc.).
 - **`Assets/Project/Scenes/SampleScene.unity`** — Main game scene with Board GameObject (at 4.5, 9.5) and 2D camera.
 - **`Assets/Project/Sprites/`** — Game sprites (Grid.png used as tiled board background).
 - **`Assets/Project/Prefabs/`** — Reusable prefabs (empty, to be populated).
@@ -70,6 +74,7 @@ The Board's local origin is the center of the grid. Grid bounds are x: -5 to 5, 
 
 ### Project Structure
 - Game scripts go in `Assets/Project/Scripts/`.
+- ScriptableObject assets go in `Assets/Project/ScriptableObjects/`.
 - Prefabs go in `Assets/Project/Prefabs/`.
 - Rendering settings are in `Assets/Project/Settings/` (Renderer2D.asset, UniversalRP.asset).
 - Files under `Library/`, `Temp/`, `obj/` are auto-generated and git-ignored.
@@ -119,6 +124,13 @@ The Board's local origin is the center of the grid. Grid bounds are x: -5 to 5, 
 - Ghost updates on every move, rotation, gravity step, and spawn. Cleared on lock before the flash/clear sequence.
 - Sorting order: grid background (0) < ghost blocks (1) < active piece blocks (2).
 - Ghost alpha is Inspector-tunable via `ghostAlpha` on the Board component.
+
+### Spawn Strategy
+- Piece selection uses the **Strategy pattern** via `ScriptableObject` assets. `Board` holds a `[SerializeField] SpawnStrategy spawnStrategy` reference.
+- `SpawnStrategy` is an abstract `ScriptableObject` with `Next()` and `Reset()`. Concrete implementations: `BagRandomStrategy` (7-bag, default) and `SimpleRandomStrategy` (uniform random).
+- ScriptableObjects persist state between play sessions in the editor, so `Board.Awake()` calls `spawnStrategy.Reset()` to ensure clean state.
+- New strategies: extend `SpawnStrategy`, add `[CreateAssetMenu]`, create an asset in `Assets/Project/ScriptableObjects/`, and assign to Board in the Inspector.
+- ScriptableObject assets go in `Assets/Project/ScriptableObjects/`.
 
 ### Rotation System
 - **Super Rotation System (SRS):** All 7 pieces have 4 rotation states (0–3). O-piece rotation is skipped (all states identical).

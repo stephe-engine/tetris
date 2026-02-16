@@ -302,7 +302,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Project.Scripts.GameManager
   board: {fileID: 1762498805}
-  stepDelay: 0.5
+  stepDelay: 1
+  lockDelay: 0.4
 --- !u!4 &549729091
 Transform:
   m_ObjectHideFlags: 0
@@ -508,6 +509,10 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Board
   width: 10
   height: 20
+  flashDuration: 0.75
+  flashCount: 3
+  ghostAlpha: 0.1
+  spawnStrategy: {fileID: 11400000, guid: 9073ebd4e88ad8f4a84cf2499fbacec8, type: 2}
   spriteI: {fileID: 21300000, guid: a78829c9f8116cf42b5f0fb1b09be313, type: 3}
   spriteO: {fileID: 21300000, guid: d4d464255adb8b3489f667a17e72b2a3, type: 3}
   spriteT: {fileID: 21300000, guid: a4dd387ce6156d84786bddbd2663dedc, type: 3}

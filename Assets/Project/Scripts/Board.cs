@@ -22,6 +22,9 @@ namespace Project.Scripts
         /// <summary>Alpha transparency of the ghost piece preview (0 = invisible, 1 = opaque).</summary>
         [SerializeField] [Range(0f, 1f)] private float ghostAlpha = 0.1f;
 
+        /// <summary>Strategy used to select the next tetromino type when spawning a piece.</summary>
+        [SerializeField] private SpawnStrategy spawnStrategy;
+
         [SerializeField] private Sprite spriteI;
         [SerializeField] private Sprite spriteO;
         [SerializeField] private Sprite spriteT;
@@ -57,6 +60,7 @@ namespace Project.Scripts
         {
             cells = new int[width, height];
             lockedBlocks = new GameObject[width, height];
+            spawnStrategy.Reset();
         }
 
         /// <summary>
@@ -64,7 +68,7 @@ namespace Project.Scripts
         /// </summary>
         public void SpawnPiece()
         {
-            Tetromino type = (Tetromino) Random.Range(0, System.Enum.GetValues(typeof(Tetromino)).Length);
+            Tetromino type = spawnStrategy.Next();
             Sprite sprite = GetSpriteForTetromino(type);
 
             GameObject pieceObject = new GameObject("Piece");
