@@ -14,10 +14,13 @@ namespace Project.Scripts
         public int height = 20;
 
         /// <summary>Total duration in seconds for the line clear flash animation.</summary>
-        [SerializeField] private float flashDuration = 0.3f;
+        [SerializeField] private float flashDuration = 0.75f;
 
         /// <summary>Number of on/off blink cycles during the flash animation.</summary>
         [SerializeField] private int flashCount = 3;
+
+        /// <summary>Alpha transparency of the ghost piece preview (0 = invisible, 1 = opaque).</summary>
+        [SerializeField] [Range(0f, 1f)] private float ghostAlpha = 0.1f;
 
         [SerializeField] private Sprite spriteI;
         [SerializeField] private Sprite spriteO;
@@ -32,6 +35,7 @@ namespace Project.Scripts
         private int[,] cells;
         private GameObject[,] lockedBlocks;
         private Piece activePiece;
+        private GameObject ghostPiece;
 
         /// <summary>The currently active (falling) piece, or null if none.</summary>
         public Piece ActivePiece => activePiece;
@@ -68,6 +72,8 @@ namespace Project.Scripts
 
             activePiece = pieceObject.AddComponent<Piece>();
             activePiece.Initialize(type, Data.SpawnPosition, sprite);
+
+            UpdateGhostPiece();
         }
 
         /// <summary>
@@ -117,6 +123,8 @@ namespace Project.Scripts
         /// </summary>
         public void LockPiece()
         {
+            ClearGhostPiece();
+
             if (!activePiece)
                 return;
 
@@ -262,6 +270,96 @@ namespace Project.Scripts
             }
 
             return linesCleared;
+        }
+
+        /// <summary>
+        /// Updates the ghost piece to show where the active piece would land
+        /// if hard-dropped. Creates the ghost GameObject on first call, then
+        /// repositions its blocks to match the active piece's drop destination.
+        /// </summary>
+        public void UpdateGhostPiece()
+        {
+            if (!activePiece)
+                return;
+
+            // Calculate the drop destination by walking the piece down
+            Vector2Int ghostPosition = activePiece.Position;
+
+            while (true)
+            {
+                Vector2Int testPosition = ghostPosition + Vector2Int.down;
+                bool valid = true;
+
+                for (int i = 0; i < activePiece.Cells.Length; i++)
+                {
+                    Vector2Int cellPosition = testPosition + activePiece.Cells[i];
+
+                    if (!IsValidPosition(cellPosition))
+                    {
+                        valid = false;
+                        break;
+                    }
+                }
+
+                if (!valid)
+                    break;
+
+                ghostPosition = testPosition;
+            }
+
+            // Recreate ghost if it doesn't exist or block count changed
+            if (!ghostPiece)
+            {
+                ghostPiece = new GameObject("Ghost");
+                ghostPiece.transform.SetParent(transform, false);
+            }
+
+            // Ensure correct number of child blocks
+            int existingBlocks = ghostPiece.transform.childCount;
+            int neededBlocks = activePiece.Cells.Length;
+
+            for (int i = existingBlocks; i < neededBlocks; i++)
+            {
+                GameObject block = new($"GhostBlock {i}");
+                block.transform.SetParent(ghostPiece.transform, false);
+                block.AddComponent<SpriteRenderer>();
+            }
+
+            for (int i = existingBlocks - 1; i >= neededBlocks; i--)
+            {
+                Destroy(ghostPiece.transform.GetChild(i).gameObject);
+            }
+
+            // Update each ghost block's position and appearance
+            Sprite activeSprite = activePiece.Blocks[0].GetComponent<SpriteRenderer>().sprite;
+
+            for (int i = 0; i < neededBlocks; i++)
+            {
+                Transform ghostBlock = ghostPiece.transform.GetChild(i);
+                SpriteRenderer sr = ghostBlock.GetComponent<SpriteRenderer>();
+                sr.sprite = activeSprite;
+                sr.color = new Color(1f, 1f, 1f, ghostAlpha);
+                sr.sortingOrder = 1;
+
+                Vector2 cellPosition = new Vector2(
+                    ghostPosition.x + activePiece.Cells[i].x,
+                    ghostPosition.y + activePiece.Cells[i].y
+                ) + CellCenterOffset;
+                ghostBlock.localPosition = cellPosition;
+            }
+        }
+
+        /// <summary>
+        /// Destroys the ghost piece GameObject so it doesn't linger during
+        /// lock, flash, and clear sequences.
+        /// </summary>
+        public void ClearGhostPiece()
+        {
+            if (ghostPiece)
+            {
+                Destroy(ghostPiece);
+                ghostPiece = null;
+            }
         }
 
         /// <summary>

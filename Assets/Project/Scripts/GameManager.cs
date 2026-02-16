@@ -87,6 +87,7 @@ namespace Project.Scripts
             if (moved)
             {
                 UpdateGroundedState();
+                board.UpdateGhostPiece();
             }
             else if (!grounded)
             {
@@ -138,12 +139,18 @@ namespace Project.Scripts
             {
                 case GameCommand.MoveLeft:
                     if (MovePiece(Vector2Int.left))
+                    {
                         UpdateGroundedState();
+                        board.UpdateGhostPiece();
+                    }
                     break;
 
                 case GameCommand.MoveRight:
                     if (MovePiece(Vector2Int.right))
+                    {
                         UpdateGroundedState();
+                        board.UpdateGhostPiece();
+                    }
                     break;
 
                 case GameCommand.SoftDrop:
@@ -151,21 +158,30 @@ namespace Project.Scripts
                     {
                         stepTimer = 0f; // Reset gravity so it doesn't stack with soft drop
                         UpdateGroundedState();
+                        board.UpdateGhostPiece();
                     }
                     break;
 
                 case GameCommand.HardDrop:
-                    Debug.Log("HardDrop not implemented");
+                    while (MovePiece(Vector2Int.down)) { }
+                    grounded = false;
+                    StartCoroutine(LockAndSpawn());
                     break;
 
                 case GameCommand.RotateClockwise:
                     if (RotatePiece(1))
+                    {
                         UpdateGroundedState();
+                        board.UpdateGhostPiece();
+                    }
                     break;
 
                 case GameCommand.RotateCounterClockwise:
                     if (RotatePiece(-1))
+                    {
                         UpdateGroundedState();
+                        board.UpdateGhostPiece();
+                    }
                     break;
             }
         }

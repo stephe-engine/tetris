@@ -57,7 +57,7 @@ namespace Project.Scripts
 
                 SpriteRenderer sr = block.AddComponent<SpriteRenderer>();
                 sr.sprite = sprite;
-                sr.sortingOrder = 1;
+                sr.sortingOrder = 2;
 
                 blocks[i] = block;
             }
