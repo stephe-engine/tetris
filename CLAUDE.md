@@ -18,11 +18,11 @@ This is a Unity project — it is opened and built through the Unity Editor, not
 ## Architecture
 
 - **`Assets/Project/Scripts/`** — All game scripts in the `Project.Scripts` namespace.
-  - `Board.cs` — Main game board controller. Manages the 10x20 grid, spawns pieces, validates positions.
+  - `Board.cs` — Main game board controller. Manages the 10x20 grid, spawns pieces, validates positions. Line clearing is split into `FindFullRows()` (detection), `FlashRows()` (coroutine blink animation), and `ClearAndCollapseRows()` (destroy + collapse). Flash timing is Inspector-tunable (`flashDuration`, `flashCount`).
   - `Piece.cs` — Active falling tetromino. Manages grid position, cell offsets, rotation state (`RotationIndex` 0–3), and renders via child SpriteRenderer GameObjects.
   - `TetrominoData.cs` — Static data: `Tetromino` enum (7 piece types), `Data` class (cell offsets, spawn position, rotation states, SRS wall kick tables).
   - `GameCommand.cs` — Enum of commands (MoveLeft, MoveRight, SoftDrop, HardDrop, RotateClockwise, RotateCounterClockwise). Abstraction boundary between input and game logic.
-  - `GameManager.cs` — Top-level game orchestrator. Owns gravity timing, command execution, rotation with SRS wall kicks, and game flow. Does NOT own input. Has an editor-only `ToggleGravity()` debug method.
+  - `GameManager.cs` — Top-level game orchestrator. Owns gravity timing, lock delay, command execution, rotation with SRS wall kicks, and game flow. Does NOT own input. Has an editor-only `ToggleGravity()` debug method. Uses a `LockAndSpawn()` coroutine for the lock → flash → clear → spawn sequence, pausing gravity and input during the animation.
   - `InputHandler.cs` — Reads Unity Input System actions and translates them into `GameCommand`s. Implements hold-to-repeat (holdDelay + holdRepeatRate) for Tetris-standard key repeat. Rotation and hard drop are one-shot (no repeat). Debug action map (`#if UNITY_EDITOR`) handles dev-only keybinds.
 - **`Assets/Project/Input/`** — Input configuration.
   - `TetrisInput.inputactions` — Unity Input System action definitions. Gameplay map: MoveLeft, MoveRight, SoftDrop, HardDrop, RotateClockwise, RotateCounterClockwise. Debug map: ToggleGravity (editor-only). Supports rebinding.
@@ -94,6 +94,18 @@ The Board's local origin is the center of the grid. Grid bounds are x: -5 to 5, 
 - Commands are the abstraction boundary — game logic never reads input directly. This supports networked multiplayer (serialize commands over network into same `ExecuteCommand()` pipeline).
 - Rotation uses one-shot input (no hold-to-repeat). CW: Up arrow. CCW: Z / Left Ctrl.
 - Debug keybinds live in a separate `Debug` action map, enabled only via `#if UNITY_EDITOR`. G key toggles gravity.
+
+### Lock Delay
+- When a piece lands on a surface, a lock delay timer (`lockDelay`, default 0.5s) starts instead of locking immediately on the next gravity tick.
+- Successful moves or rotations while grounded reset the timer (gives the player slide time).
+- Moving the piece off a ledge cancels the timer entirely.
+- The lock timer runs independently of gravity in `Update()`.
+
+### Line Clear Animation
+- Line clearing is a two-phase process: detect full rows, then flash, then clear.
+- `Board.FindFullRows()` detects without mutating. `Board.FlashRows()` is a coroutine that blinks rows (toggling `SpriteRenderer.color` between clear and original). `Board.ClearAndCollapseRows()` destroys and collapses.
+- During the flash, a `clearing` flag pauses both gravity and input in `GameManager`.
+- Flash timing (`flashDuration`, `flashCount`) is Inspector-tunable on the Board component.
 
 ### Rotation System
 - **Super Rotation System (SRS):** All 7 pieces have 4 rotation states (0–3). O-piece rotation is skipped (all states identical).

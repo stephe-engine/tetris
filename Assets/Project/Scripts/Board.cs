@@ -1,3 +1,5 @@
+using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace Project.Scripts
@@ -10,6 +12,12 @@ namespace Project.Scripts
     {
         public int width = 10;
         public int height = 20;
+
+        /// <summary>Total duration in seconds for the line clear flash animation.</summary>
+        [SerializeField] private float flashDuration = 0.3f;
+
+        /// <summary>Number of on/off blink cycles during the flash animation.</summary>
+        [SerializeField] private int flashCount = 3;
 
         [SerializeField] private Sprite spriteI;
         [SerializeField] private Sprite spriteO;
@@ -132,16 +140,13 @@ namespace Project.Scripts
         }
 
         /// <summary>
-        /// Detects and clears fully occupied rows, then collapses rows above
-        /// downward to fill the gaps.
+        /// Detects fully occupied rows without modifying the grid.
         /// </summary>
-        /// <returns>The number of lines cleared.</returns>
-        public int ClearLines()
+        /// <returns>A list of full row indices (array indices, not grid coords), sorted bottom to top.</returns>
+        public List<int> FindFullRows()
         {
-            RectInt bounds = Bounds;
-            int linesCleared = 0;
+            List<int> fullRows = new();
 
-            // Scan from bottom to top
             for (int row = 0; row < height; row++)
             {
                 bool full = true;
@@ -157,40 +162,103 @@ namespace Project.Scripts
 
                 if (full)
                 {
-                    // Destroy all blocks in this row
-                    for (int col = 0; col < width; col++)
-                    {
-                        Destroy(lockedBlocks[col, row]);
-                        lockedBlocks[col, row] = null;
-                        cells[col, row] = 0;
-                    }
+                    fullRows.Add(row);
+                }
+            }
 
-                    // Shift all rows above this one down by one
-                    for (int aboveRow = row + 1; aboveRow < height; aboveRow++)
+            return fullRows;
+        }
+
+        /// <summary>
+        /// Coroutine that blinks the blocks in the given rows between white and their
+        /// original color. Blinks <see cref="flashCount"/> times over <see cref="flashDuration"/> seconds.
+        /// </summary>
+        /// <param name="rows">Row indices (array indices) to flash.</param>
+        public IEnumerator FlashRows(List<int> rows)
+        {
+            float interval = flashDuration / (flashCount * 2);
+
+            // Cache original colors so we can restore them
+            Dictionary<SpriteRenderer, Color> originalColors = new();
+            foreach (int row in rows)
+            {
+                for (int col = 0; col < width; col++)
+                {
+                    if (lockedBlocks[col, row])
                     {
-                        for (int col = 0; col < width; col++)
+                        SpriteRenderer sr = lockedBlocks[col, row].GetComponent<SpriteRenderer>();
+                        if (sr)
                         {
-                            cells[col, aboveRow - 1] = cells[col, aboveRow];
-                            cells[col, aboveRow] = 0;
-
-                            lockedBlocks[col, aboveRow - 1] = lockedBlocks[col, aboveRow];
-                            lockedBlocks[col, aboveRow] = null;
-
-                            if (lockedBlocks[col, aboveRow - 1])
-                            {
-                                Vector2 newPos = new Vector2(
-                                    col + bounds.xMin,
-                                    aboveRow - 1 + bounds.yMin
-                                ) + CellCenterOffset;
-                                lockedBlocks[col, aboveRow - 1].transform.localPosition = newPos;
-                            }
+                            originalColors[sr] = sr.color;
                         }
                     }
-
-                    // Re-check the same row index since a new row shifted into it
-                    row--;
-                    linesCleared++;
                 }
+            }
+
+            for (int i = 0; i < flashCount; i++)
+            {
+                // Flash transparent (hide blocks)
+                foreach (SpriteRenderer sr in originalColors.Keys)
+                {
+                    sr.color = Color.clear;
+                }
+                yield return new WaitForSeconds(interval);
+
+                // Restore original color (show blocks)
+                foreach (KeyValuePair<SpriteRenderer, Color> pair in originalColors)
+                {
+                    pair.Key.color = pair.Value;
+                }
+                yield return new WaitForSeconds(interval);
+            }
+        }
+
+        /// <summary>
+        /// Destroys blocks in the given rows and collapses rows above downward to fill gaps.
+        /// </summary>
+        /// <param name="rows">Sorted (bottom to top) list of full row indices to clear.</param>
+        /// <returns>The number of lines cleared.</returns>
+        public int ClearAndCollapseRows(List<int> rows)
+        {
+            RectInt bounds = Bounds;
+            int linesCleared = 0;
+
+            // Process from bottom; adjust indices as rows collapse
+            foreach (int originalRow in rows)
+            {
+                int row = originalRow - linesCleared;
+
+                // Destroy all blocks in this row
+                for (int col = 0; col < width; col++)
+                {
+                    Destroy(lockedBlocks[col, row]);
+                    lockedBlocks[col, row] = null;
+                    cells[col, row] = 0;
+                }
+
+                // Shift all rows above this one down by one
+                for (int aboveRow = row + 1; aboveRow < height; aboveRow++)
+                {
+                    for (int col = 0; col < width; col++)
+                    {
+                        cells[col, aboveRow - 1] = cells[col, aboveRow];
+                        cells[col, aboveRow] = 0;
+
+                        lockedBlocks[col, aboveRow - 1] = lockedBlocks[col, aboveRow];
+                        lockedBlocks[col, aboveRow] = null;
+
+                        if (lockedBlocks[col, aboveRow - 1])
+                        {
+                            Vector2 newPos = new Vector2(
+                                col + bounds.xMin,
+                                aboveRow - 1 + bounds.yMin
+                            ) + CellCenterOffset;
+                            lockedBlocks[col, aboveRow - 1].transform.localPosition = newPos;
+                        }
+                    }
+                }
+
+                linesCleared++;
             }
 
             return linesCleared;
