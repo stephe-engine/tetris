@@ -17,6 +17,7 @@ namespace Project.Scripts
         [SerializeField] private float stepDelay = 1.0f;
 
         private float stepTimer;
+        private bool gravityEnabled = true;
 
         private void Start()
         {
@@ -25,6 +26,9 @@ namespace Project.Scripts
 
         private void Update()
         {
+            if (!gravityEnabled)
+                return;
+
             stepTimer += Time.deltaTime;
 
             if (stepTimer >= stepDelay)
@@ -32,6 +36,19 @@ namespace Project.Scripts
                 stepTimer = 0f;
                 Step();
             }
+        }
+
+        /// <summary>
+        /// Toggles automatic gravity on or off. Editor-only debug feature.
+        /// When gravity is re-enabled, the step timer resets to avoid an
+        /// immediate catch-up step.
+        /// </summary>
+        [System.Diagnostics.Conditional("UNITY_EDITOR")]
+        public void ToggleGravity()
+        {
+            gravityEnabled = !gravityEnabled;
+            stepTimer = 0f;
+            Debug.Log($"Gravity {(gravityEnabled ? "enabled" : "disabled")}");
         }
 
         /// <summary>
@@ -76,6 +93,14 @@ namespace Project.Scripts
                 case GameCommand.HardDrop:
                     Debug.Log("HardDrop not implemented");
                     break;
+
+                case GameCommand.RotateClockwise:
+                    RotatePiece(1);
+                    break;
+
+                case GameCommand.RotateCounterClockwise:
+                    RotatePiece(-1);
+                    break;
             }
         }
 
@@ -106,6 +131,67 @@ namespace Project.Scripts
 
             piece.Move(newPosition);
             return true;
+        }
+
+        /// <summary>
+        /// Attempts to rotate the active piece using the Super Rotation System (SRS).
+        /// Tries up to 5 wall kick offsets for the given rotation transition.
+        /// Skips rotation entirely for the O-piece.
+        /// </summary>
+        /// <param name="direction">Rotation direction: +1 for clockwise, -1 for counter-clockwise.</param>
+        /// <returns>True if the rotation was valid and applied; false if all kick tests failed.</returns>
+        private bool RotatePiece(int direction)
+        {
+            Piece piece = board.ActivePiece;
+
+            if (!piece)
+                return false;
+
+            // O-piece does not rotate
+            if (piece.TetrominoType == Tetromino.O)
+                return false;
+
+            int fromRotation = piece.RotationIndex;
+            int toRotation = (fromRotation + direction + 4) % 4;
+
+            Vector2Int[] rotatedCells = Data.AllRotations[piece.TetrominoType][toRotation];
+            Vector2Int[] kickOffsets = Data.WallKicks[piece.TetrominoType][(fromRotation, toRotation)];
+
+            // Try each of the 5 SRS kick offsets (test 0 is always (0,0) — no shift)
+            for (int k = 0; k < kickOffsets.Length; k++)
+            {
+                // Candidate pivot = current position shifted by this kick offset
+                Vector2Int kickedPosition = piece.Position + kickOffsets[k];
+                bool valid = true;
+
+                // Check all 4 cells of the rotated piece at the kicked position
+                for (int i = 0; i < rotatedCells.Length; i++)
+                {
+                    Vector2Int cellPosition = kickedPosition + rotatedCells[i];
+
+                    if (!board.IsValidPosition(cellPosition))
+                    {
+                        // Any out-of-bounds or occupied cell fails this kick test
+                        valid = false;
+                        break;
+                    }
+                }
+
+                if (valid)
+                {
+                    // Apply the kick translation only if it's non-zero
+                    if (kickOffsets[k] != Vector2Int.zero)
+                    {
+                        piece.Move(kickedPosition);
+                    }
+
+                    piece.Rotate(toRotation, rotatedCells);
+                    return true;
+                }
+            }
+
+            // All 5 kick tests failed — rotation is blocked
+            return false;
         }
     }
 }

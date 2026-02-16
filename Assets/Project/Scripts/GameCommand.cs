@@ -19,5 +19,11 @@ namespace Project.Scripts
 
         /// <summary>Instantly drop the active piece to the lowest valid position.</summary>
         HardDrop,
+
+        /// <summary>Rotate the active piece 90 degrees clockwise using SRS wall kicks.</summary>
+        RotateClockwise,
+
+        /// <summary>Rotate the active piece 90 degrees counter-clockwise using SRS wall kicks.</summary>
+        RotateCounterClockwise,
     }
 }

@@ -15,6 +15,9 @@ namespace Project.Scripts
         /// <summary>The piece's pivot position in grid coordinates.</summary>
         public Vector2Int Position { get; private set; }
 
+        /// <summary>Current rotation state index (0–3), where 0 is the spawn orientation.</summary>
+        public int RotationIndex { get; private set; }
+
         /// <summary>Cell offsets relative to <see cref="Position"/>. Copied from <see cref="Data.Cells"/> so rotation
         /// can modify them safely.</summary>
         public Vector2Int[] Cells { get; private set; }
@@ -35,6 +38,7 @@ namespace Project.Scripts
         {
             TetrominoType = type;
             Position = position;
+            RotationIndex = 0;
 
             // Copy cells so rotation won't corrupt shared data
             Vector2Int[] source = Data.Cells[type];
@@ -77,6 +81,18 @@ namespace Project.Scripts
         {
             newCells.CopyTo(Cells, 0);
             UpdateVisuals();
+        }
+
+        /// <summary>
+        /// Updates the rotation state and cell offsets simultaneously.
+        /// Called after a successful rotation with wall kick resolution.
+        /// </summary>
+        /// <param name="newRotationIndex">The new rotation state (0–3).</param>
+        /// <param name="newCells">The rotated cell offsets.</param>
+        public void Rotate(int newRotationIndex, Vector2Int[] newCells)
+        {
+            RotationIndex = newRotationIndex;
+            SetCells(newCells);
         }
 
         /// <summary>

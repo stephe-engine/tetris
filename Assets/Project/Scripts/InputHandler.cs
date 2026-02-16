@@ -37,11 +37,17 @@ namespace Project.Scripts
         private void OnEnable()
         {
             inputActions.Gameplay.Enable();
+#if UNITY_EDITOR
+            inputActions.Debug.Enable();
+#endif
         }
 
         private void OnDisable()
         {
             inputActions.Gameplay.Disable();
+#if UNITY_EDITOR
+            inputActions.Debug.Disable();
+#endif
         }
 
         private void OnDestroy()
@@ -63,6 +69,24 @@ namespace Project.Scripts
             {
                 gameManager.ExecuteCommand(GameCommand.HardDrop);
             }
+
+            // Rotations fire once on press only — no repeat
+            if (inputActions.Gameplay.RotateClockwise.WasPressedThisFrame())
+            {
+                gameManager.ExecuteCommand(GameCommand.RotateClockwise);
+            }
+
+            if (inputActions.Gameplay.RotateCounterClockwise.WasPressedThisFrame())
+            {
+                gameManager.ExecuteCommand(GameCommand.RotateCounterClockwise);
+            }
+
+#if UNITY_EDITOR
+            if (inputActions.Debug.ToggleGravity.WasPressedThisFrame())
+            {
+                gameManager.ToggleGravity();
+            }
+#endif
         }
 
         /// <summary>

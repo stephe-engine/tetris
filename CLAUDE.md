@@ -19,13 +19,13 @@ This is a Unity project — it is opened and built through the Unity Editor, not
 
 - **`Assets/Project/Scripts/`** — All game scripts in the `Project.Scripts` namespace.
   - `Board.cs` — Main game board controller. Manages the 10x20 grid, spawns pieces, validates positions.
-  - `Piece.cs` — Active falling tetromino. Manages grid position, cell offsets, and renders via child SpriteRenderer GameObjects.
-  - `TetrominoData.cs` — Static data: `Tetromino` enum (7 piece types), `Data` class (cell offsets, spawn position).
-  - `GameCommand.cs` — Enum of commands (MoveLeft, MoveRight, SoftDrop, HardDrop). Abstraction boundary between input and game logic.
-  - `GameManager.cs` — Top-level game orchestrator. Owns gravity timing, command execution, and game flow. Does NOT own input.
-  - `InputHandler.cs` — Reads Unity Input System actions and translates them into `GameCommand`s. Implements hold-to-repeat (holdDelay + holdRepeatRate) for Tetris-standard key repeat.
+  - `Piece.cs` — Active falling tetromino. Manages grid position, cell offsets, rotation state (`RotationIndex` 0–3), and renders via child SpriteRenderer GameObjects.
+  - `TetrominoData.cs` — Static data: `Tetromino` enum (7 piece types), `Data` class (cell offsets, spawn position, rotation states, SRS wall kick tables).
+  - `GameCommand.cs` — Enum of commands (MoveLeft, MoveRight, SoftDrop, HardDrop, RotateClockwise, RotateCounterClockwise). Abstraction boundary between input and game logic.
+  - `GameManager.cs` — Top-level game orchestrator. Owns gravity timing, command execution, rotation with SRS wall kicks, and game flow. Does NOT own input. Has an editor-only `ToggleGravity()` debug method.
+  - `InputHandler.cs` — Reads Unity Input System actions and translates them into `GameCommand`s. Implements hold-to-repeat (holdDelay + holdRepeatRate) for Tetris-standard key repeat. Rotation and hard drop are one-shot (no repeat). Debug action map (`#if UNITY_EDITOR`) handles dev-only keybinds.
 - **`Assets/Project/Input/`** — Input configuration.
-  - `TetrisInput.inputactions` — Unity Input System action definitions (MoveLeft, MoveRight, SoftDrop, HardDrop). Supports rebinding.
+  - `TetrisInput.inputactions` — Unity Input System action definitions. Gameplay map: MoveLeft, MoveRight, SoftDrop, HardDrop, RotateClockwise, RotateCounterClockwise. Debug map: ToggleGravity (editor-only). Supports rebinding.
   - `TetrisInput.cs` — Auto-generated C# wrapper (do not edit manually).
 - **`Assets/Project/Scenes/SampleScene.unity`** — Main game scene with Board GameObject (at 4.5, 9.5) and 2D camera.
 - **`Assets/Project/Sprites/`** — Game sprites (Grid.png used as tiled board background).
@@ -47,8 +47,9 @@ Board (world pos 4.5, 9.5)         — SpriteRenderer (tiled Grid.png, 10x20)
 ### Data Flow
 
 ```
-InputHandler ──GameCommand──→ GameManager ──→ Board.ActivePiece.Move()
+InputHandler ──GameCommand──→ GameManager ──→ Board.ActivePiece.Move()/Rotate()
 GameManager.Update() ───gravity tick───→ Board.ActivePiece.Move(down)
+GameManager.RotatePiece() ──SRS wall kicks──→ Board.ActivePiece.Rotate()
 ```
 
 The Board's local origin is the center of the grid. Grid bounds are x: -5 to 5, y: -10 to 10. Grid cell edges sit at integer positions; cell centers are at half-integer positions (blocks offset by +0.5 on both axes).
@@ -91,3 +92,11 @@ The Board's local origin is the center of the grid. Grid bounds are x: -5 to 5, 
 - `InputHandler` translates raw input into `GameCommand` enums sent to `GameManager`.
 - Hold-to-repeat timing (`holdDelay` + `holdRepeatRate`) is implemented in `InputHandler` for standard Tetris feel.
 - Commands are the abstraction boundary — game logic never reads input directly. This supports networked multiplayer (serialize commands over network into same `ExecuteCommand()` pipeline).
+- Rotation uses one-shot input (no hold-to-repeat). CW: Up arrow. CCW: Z / Left Ctrl.
+- Debug keybinds live in a separate `Debug` action map, enabled only via `#if UNITY_EDITOR`. G key toggles gravity.
+
+### Rotation System
+- **Super Rotation System (SRS):** All 7 pieces have 4 rotation states (0–3). O-piece rotation is skipped (all states identical).
+- **Wall kicks:** Each rotation attempt tries 5 offset positions from `Data.WallKicks`. Test 0 is always (0,0). I-piece has its own kick table; J/L/S/T/Z share one.
+- **CCW kicks** are derived by negating offsets of the reverse CW transition.
+- Rotation data is precomputed at static init in `TetrominoData.cs` (`Data.AllRotations`, `Data.WallKicks`).
