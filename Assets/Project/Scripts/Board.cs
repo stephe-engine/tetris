@@ -43,11 +43,6 @@ namespace Project.Scripts
             cells = new int[width, height];
         }
 
-        private void Start()
-        {
-            SpawnPiece();
-        }
-
         /// <summary>
         /// Spawns a new random tetromino at the default spawn position.
         /// Destroys any existing active piece before creating the new one.
@@ -57,7 +52,7 @@ namespace Project.Scripts
             Tetromino type = (Tetromino) Random.Range(0, System.Enum.GetValues(typeof(Tetromino)).Length);
             Sprite sprite = GetSpriteForTetromino(type);
 
-            if (activePiece != null)
+            if (activePiece)
             {
                 Destroy(activePiece.gameObject);
             }
@@ -76,17 +71,17 @@ namespace Project.Scripts
         /// <returns>The corresponding sprite, or the I-piece sprite as a fallback.</returns>
         private Sprite GetSpriteForTetromino(Tetromino type)
         {
-            switch (type)
+            return type switch
             {
-                case Tetromino.I: return spriteI;
-                case Tetromino.O: return spriteO;
-                case Tetromino.T: return spriteT;
-                case Tetromino.S: return spriteS;
-                case Tetromino.Z: return spriteZ;
-                case Tetromino.J: return spriteJ;
-                case Tetromino.L: return spriteL;
-                default: return spriteI;
-            }
+                Tetromino.I => spriteI,
+                Tetromino.O => spriteO,
+                Tetromino.T => spriteT,
+                Tetromino.S => spriteS,
+                Tetromino.Z => spriteZ,
+                Tetromino.J => spriteJ,
+                Tetromino.L => spriteL,
+                _ => spriteI,
+            };
         }
 
         /// <summary>

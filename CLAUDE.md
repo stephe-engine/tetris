@@ -21,6 +21,12 @@ This is a Unity project — it is opened and built through the Unity Editor, not
   - `Board.cs` — Main game board controller. Manages the 10x20 grid, spawns pieces, validates positions.
   - `Piece.cs` — Active falling tetromino. Manages grid position, cell offsets, and renders via child SpriteRenderer GameObjects.
   - `TetrominoData.cs` — Static data: `Tetromino` enum (7 piece types), `Data` class (cell offsets, spawn position).
+  - `GameCommand.cs` — Enum of commands (MoveLeft, MoveRight, SoftDrop, HardDrop). Abstraction boundary between input and game logic.
+  - `GameManager.cs` — Top-level game orchestrator. Owns gravity timing, command execution, and game flow. Does NOT own input.
+  - `InputHandler.cs` — Reads Unity Input System actions and translates them into `GameCommand`s. Implements hold-to-repeat (holdDelay + holdRepeatRate) for Tetris-standard key repeat.
+- **`Assets/Project/Input/`** — Input configuration.
+  - `TetrisInput.inputactions` — Unity Input System action definitions (MoveLeft, MoveRight, SoftDrop, HardDrop). Supports rebinding.
+  - `TetrisInput.cs` — Auto-generated C# wrapper (do not edit manually).
 - **`Assets/Project/Scenes/SampleScene.unity`** — Main game scene with Board GameObject (at 4.5, 9.5) and 2D camera.
 - **`Assets/Project/Sprites/`** — Game sprites (Grid.png used as tiled board background).
 - **`Assets/Project/Prefabs/`** — Reusable prefabs (empty, to be populated).
@@ -29,12 +35,20 @@ This is a Unity project — it is opened and built through the Unity Editor, not
 ### Scene Structure
 
 ```
+GameManager (world pos 0, 0)       — GameManager.cs + InputHandler.cs
 Board (world pos 4.5, 9.5)         — SpriteRenderer (tiled Grid.png, 10x20)
   └── Piece (runtime child)         — Piece.cs component
         ├── Block 0                  — SpriteRenderer (colored block sprite)
         ├── Block 1
         ├── Block 2
         └── Block 3
+```
+
+### Data Flow
+
+```
+InputHandler ──GameCommand──→ GameManager ──→ Board.ActivePiece.Move()
+GameManager.Update() ───gravity tick───→ Board.ActivePiece.Move(down)
 ```
 
 The Board's local origin is the center of the grid. Grid bounds are x: -5 to 5, y: -10 to 10. Grid cell edges sit at integer positions; cell centers are at half-integer positions (blocks offset by +0.5 on both axes).
@@ -59,4 +73,21 @@ The Board's local origin is the center of the grid. Grid bounds are x: -5 to 5, 
 - **Explicit types:** Use explicit types, not `var` (Unity convention). Exception: `new()` target-typed expressions are fine (e.g. `Vector2 offset = new(0.5f, 0.5f)`).
 - **Private field naming:** Plain `camelCase` with no underscore prefix (Unity convention). E.g. `cells`, `activePiece`, `spriteI`.
 - **XML documentation:** All public types and members use `///` XML doc comments (`<summary>`, `<param>`, `<returns>`, `<see cref=""/>`).
+- **SerializeField naming:** Prefer non-abbreviated, descriptive names for `[SerializeField]` fields since they appear in the Inspector (e.g. `holdDelay` over `dasDelay`). Only abbreviate if the full name is excessively long.
+- **`foreach` vs `for`:** Use `foreach` for readability when the index isn't needed; use `for` when the index is required. Both compile to equivalent code for arrays and `List<T>`. Avoid `foreach` on interface types (`IEnumerable<T>`, `IDictionary`) in hot paths as these may allocate.
+- **Switch expressions vs statements:** Use switch expressions for pure value mappings (returning a value). Use switch statements when executing side effects (calling methods, multiple statements per case).
+- **Null checks on Unity objects:** Use implicit bool (`if (!obj)` / `if (obj)`) instead of `== null` / `!= null`. Unity overrides `operator ==` on `UnityEngine.Object` with an expensive native interop call; the implicit bool conversion has the same semantics but is the idiomatic pattern.
 - **No constructors on MonoBehaviours:** Use `Initialize()` methods instead. Unity creates MonoBehaviours internally.
+
+### Commit Messages
+- **Subject line:** Keep under 50 characters (hard max 72). Capitalize the first letter. Do not end with a period.
+- **Blank line:** Always separate the subject from the body with a blank line.
+- **Body:** Wrap at 72 characters per line. Explain *what* changed and *why*, not *how* (the code shows how).
+- **Imperative mood:** Write as if completing "If applied, this commit will..." (e.g. "Add feature" not "Added feature" or "Adds feature").
+- **No Co-Authored-By:** Do not append Co-Authored-By trailers to commit messages.
+
+### Input System
+- Input actions are defined in `Assets/Project/Input/TetrisInput.inputactions` with auto-generated C# wrapper.
+- `InputHandler` translates raw input into `GameCommand` enums sent to `GameManager`.
+- Hold-to-repeat timing (`holdDelay` + `holdRepeatRate`) is implemented in `InputHandler` for standard Tetris feel.
+- Commands are the abstraction boundary — game logic never reads input directly. This supports networked multiplayer (serialize commands over network into same `ExecuteCommand()` pipeline).
