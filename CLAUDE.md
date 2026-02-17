@@ -13,7 +13,7 @@ This is a Unity project — it is opened and built through the Unity Editor, not
 - **Unity version:** 6000.3.8f1
 - **C# version:** 9.0, targeting .NET Framework 4.7.1
 - **Render pipeline:** Universal Render Pipeline (2D renderer)
-- **Test framework:** `com.unity.test-framework` 1.6.0 is installed (tests run via Unity Test Runner window)
+- **Test framework:** `com.unity.test-framework` 1.6.0 with NUnit (tests run via Window > General > Test Runner)
 
 ## Architecture
 
@@ -31,6 +31,7 @@ This is a Unity project — it is opened and built through the Unity Editor, not
   - `TetrisInput.inputactions` — Unity Input System action definitions. Gameplay map: MoveLeft, MoveRight, SoftDrop, HardDrop, RotateClockwise, RotateCounterClockwise. Debug map: ToggleGravity (editor-only). Supports rebinding.
   - `TetrisInput.cs` — Auto-generated C# wrapper (do not edit manually).
 - **`Assets/Project/ScriptableObjects/`** — ScriptableObject assets (spawn strategies, etc.).
+- **`Assets/Project/Tests/EditMode/`** — EditMode unit tests (NUnit). Tests for `TetrominoData`, `BagRandomStrategy`, `Board`, `Piece`, and `GameManager`.
 - **`Assets/Project/Scenes/Gameplay.unity`** — Main game scene with Board GameObject (at 4.5, 9.5) and 2D camera.
 - **`Assets/Project/Sprites/`** — Game sprites (Grid.png used as tiled board background, PreviewPanel.png used as 9-sliced next-piece preview background).
 - **`Assets/Project/Prefabs/`** — Reusable prefabs (empty, to be populated).
@@ -80,10 +81,24 @@ The Board's local origin is the center of the grid. Grid bounds are x: -5 to 5, 
 
 ### Project Structure
 - Game scripts go in `Assets/Project/Scripts/`.
+- EditMode tests go in `Assets/Project/Tests/EditMode/`.
 - ScriptableObject assets go in `Assets/Project/ScriptableObjects/`.
 - Prefabs go in `Assets/Project/Prefabs/`.
 - Rendering settings are in `Assets/Project/Settings/` (Renderer2D.asset, UniversalRP.asset).
 - Files under `Library/`, `Temp/`, `obj/` are auto-generated and git-ignored.
+
+### Assembly Definitions
+- **`Project.Scripts`** (`Assets/Project/Scripts/`) — game code. References `Unity.InputSystem` and `Project.Input`.
+- **`Project.Input`** (`Assets/Project/Input/`) — auto-generated Input System wrapper (`TetrisInput.cs`). References `Unity.InputSystem`.
+- **`Project.Scripts.EditMode.Tests`** (`Assets/Project/Tests/EditMode/`) — EditMode tests. References `Project.Scripts`, `UnityEngine.TestRunner`, `UnityEditor.TestRunner`, and `nunit.framework.dll`. Editor-only, gated by `UNITY_INCLUDE_TESTS`.
+
+### Testing
+- Tests use NUnit via `com.unity.test-framework`. Run from Window > General > Test Runner (EditMode tab).
+- EditMode tests run without entering Play mode — suitable for pure logic, data validation, and MonoBehaviour/ScriptableObject state.
+- MonoBehaviours are created via `new GameObject().AddComponent<T>()`. Private fields are initialized via reflection since `Awake()` may not run in EditMode.
+- ScriptableObjects are created via `ScriptableObject.CreateInstance<T>()`.
+- `Board.ClearAndCollapseRows()` calls `Destroy()` which logs errors in EditMode; tests use `LogAssert.Expect()` to suppress these.
+- Clean up test GameObjects with `Object.DestroyImmediate()` in `[TearDown]`.
 
 ### C# Coding Style
 - **Namespace:** All scripts use `namespace Project.Scripts`.

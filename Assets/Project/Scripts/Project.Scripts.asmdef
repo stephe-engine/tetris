@@ -1,0 +1,17 @@
+{
+    "name": "Project.Scripts",
+    "rootNamespace": "Project.Scripts",
+    "references": [
+        "Unity.InputSystem",
+        "Project.Input"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
