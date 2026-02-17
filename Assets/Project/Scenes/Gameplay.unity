@@ -513,6 +513,8 @@ MonoBehaviour:
   flashCount: 3
   ghostAlpha: 0.1
   spawnStrategy: {fileID: 11400000, guid: 9073ebd4e88ad8f4a84cf2499fbacec8, type: 2}
+  previewPanelSprite: {fileID: 21300000, guid: 59e141f206840414fb815d357f1343bc, type: 3}
+  previewOffset: {x: 8, y: 7.5}
   spriteI: {fileID: 21300000, guid: a78829c9f8116cf42b5f0fb1b09be313, type: 3}
   spriteO: {fileID: 21300000, guid: d4d464255adb8b3489f667a17e72b2a3, type: 3}
   spriteT: {fileID: 21300000, guid: a4dd387ce6156d84786bddbd2663dedc, type: 3}

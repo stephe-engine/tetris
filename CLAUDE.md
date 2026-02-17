@@ -18,7 +18,7 @@ This is a Unity project — it is opened and built through the Unity Editor, not
 ## Architecture
 
 - **`Assets/Project/Scripts/`** — All game scripts in the `Project.Scripts` namespace.
-  - `Board.cs` — Main game board controller. Manages the 10x20 grid, spawns pieces, validates positions. Piece selection is delegated to a `SpawnStrategy` ScriptableObject (Inspector-assignable). Line clearing is split into `FindFullRows()` (detection), `FlashRows()` (coroutine blink animation), and `ClearAndCollapseRows()` (destroy + collapse). Flash timing is Inspector-tunable (`flashDuration`, `flashCount`). Also owns the ghost piece preview — `UpdateGhostPiece()` calculates the hard-drop destination and renders translucent blocks there; `ClearGhostPiece()` removes it during locking. Ghost alpha is Inspector-tunable (`ghostAlpha`).
+  - `Board.cs` — Main game board controller. Manages the 10x20 grid, spawns pieces, validates positions. Piece selection is delegated to a `SpawnStrategy` ScriptableObject (Inspector-assignable). Line clearing is split into `FindFullRows()` (detection), `FlashRows()` (coroutine blink animation), and `ClearAndCollapseRows()` (destroy + collapse). Flash timing is Inspector-tunable (`flashDuration`, `flashCount`). Also owns the ghost piece preview — `UpdateGhostPiece()` calculates the hard-drop destination and renders translucent blocks there; `ClearGhostPiece()` removes it during locking. Ghost alpha is Inspector-tunable (`ghostAlpha`). Also owns the next-piece preview — `UpdatePreview()` shows the upcoming piece in a 5x5 panel to the right of the board; `ClearPreview()` removes the blocks during locking. Preview offset is Inspector-tunable (`previewOffset`). The next piece is pre-fetched from the spawn strategy and stored in `nextType`.
   - `SpawnStrategy.cs` — Abstract `ScriptableObject` base class for tetromino spawn strategies. Defines `Next()` (returns the next `Tetromino`) and `Reset()` (clears internal state for new games).
   - `BagRandomStrategy.cs` — Standard 7-bag spawn strategy. All 7 piece types are shuffled into a bag and dealt one at a time; the bag refills when empty. Prevents piece droughts. Default strategy on the Board.
   - `SimpleRandomStrategy.cs` — Uniform random spawn strategy. Picks any piece with equal probability each time (original behavior). No drought protection.
@@ -31,8 +31,8 @@ This is a Unity project — it is opened and built through the Unity Editor, not
   - `TetrisInput.inputactions` — Unity Input System action definitions. Gameplay map: MoveLeft, MoveRight, SoftDrop, HardDrop, RotateClockwise, RotateCounterClockwise. Debug map: ToggleGravity (editor-only). Supports rebinding.
   - `TetrisInput.cs` — Auto-generated C# wrapper (do not edit manually).
 - **`Assets/Project/ScriptableObjects/`** — ScriptableObject assets (spawn strategies, etc.).
-- **`Assets/Project/Scenes/SampleScene.unity`** — Main game scene with Board GameObject (at 4.5, 9.5) and 2D camera.
-- **`Assets/Project/Sprites/`** — Game sprites (Grid.png used as tiled board background).
+- **`Assets/Project/Scenes/Gameplay.unity`** — Main game scene with Board GameObject (at 4.5, 9.5) and 2D camera.
+- **`Assets/Project/Sprites/`** — Game sprites (Grid.png used as tiled board background, PreviewPanel.png used as 9-sliced next-piece preview background).
 - **`Assets/Project/Prefabs/`** — Reusable prefabs (empty, to be populated).
 - **`Assets/Plugins/Chess Studio/Puzzle Blocks Icon Pack/`** — Asset Store block sprites. Using the "Stone" variants (e.g. `lightBlueStone.png`, `redStone.png`) for tetromino blocks.
 
@@ -41,6 +41,12 @@ This is a Unity project — it is opened and built through the Unity Editor, not
 ```
 GameManager (world pos 0, 0)       — GameManager.cs + InputHandler.cs
 Board (world pos 4.5, 9.5)         — SpriteRenderer (tiled Grid.png, 10x20, sortingOrder 0)
+  ├── PreviewPanel (runtime child)  — SpriteRenderer (sliced PreviewPanel.png, 5x5, sortingOrder 0)
+  ├── Preview (runtime child)       — Next-piece preview blocks
+  │     ├── PreviewBlock 0           — SpriteRenderer (sortingOrder 1, full opacity)
+  │     ├── PreviewBlock 1
+  │     ├── PreviewBlock 2
+  │     └── PreviewBlock 3
   ├── Ghost (runtime child)         — Managed by Board, translucent drop preview
   │     ├── GhostBlock 0             — SpriteRenderer (sortingOrder 1, alpha = ghostAlpha)
   │     ├── GhostBlock 1
@@ -116,6 +122,16 @@ The Board's local origin is the center of the grid. Grid bounds are x: -5 to 5, 
 - `Board.FindFullRows()` detects without mutating. `Board.FlashRows()` is a coroutine that blinks rows (toggling `SpriteRenderer.color` between clear and original). `Board.ClearAndCollapseRows()` destroys and collapses.
 - During the flash, a `clearing` flag pauses both gravity and input in `GameManager`.
 - Flash timing (`flashDuration`, `flashCount`) is Inspector-tunable on the Board component.
+
+### Next Piece Preview
+- A 5x5 dark panel with a gray border (`PreviewPanel.png`, 8x8 px 9-sliced sprite, `pixelsPerUnit: 8`) appears to the right of the board.
+- The panel uses `SpriteDrawMode.Sliced` so the 1px border stays crisp at any size.
+- Position is Inspector-tunable via `previewOffset` on the Board component (default: `(8, 7.5)` in local space).
+- The next piece type is pre-fetched from `spawnStrategy.Next()` after each spawn and stored in `nextType`. On the next spawn, the stored type is used and a new one is pre-fetched.
+- Preview blocks are centered within the panel by computing the bounding box center of cell offsets.
+- Preview blocks follow the ghost piece pattern: a plain `GameObject` ("Preview") with 4 child `SpriteRenderer`s, recreated on each spawn.
+- The preview panel background ("PreviewPanel") is created once lazily and persists across spawns.
+- `ClearPreview()` destroys only the blocks, not the panel, called alongside `ClearGhostPiece()` during locking.
 
 ### Hard Drop & Ghost Piece
 - Hard drop (Space) instantly moves the piece to the lowest valid position and locks immediately (no lock delay).
