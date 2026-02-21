@@ -30,6 +30,7 @@ This is a Unity project — it is opened and built through the Unity Editor, not
   - `SoundManager.cs` — Manages all audio. Subscribes to `GameManager` events and plays the matching SFX clip. Owns two `AudioSource` components created at runtime: one looping music source and one one-shot SFX source. Exposes `SetMusicVolume()`, `SetSfxVolume()`, and `SetMusicTrack()` (with fade). Track switching fades out/in over 0.5 s via a coroutine.
   - `SoundSettings.cs` — `ScriptableObject` data container (`[CreateAssetMenu(menuName = "Tetris/Sound Settings")]`). Holds `musicTracks[]`, `musicTrackNames[]`, `defaultMusicTrackIndex`, `defaultMusicVolume`, `defaultSfxVolume`, and individual SFX clips for every game event (move, rotate, softDrop, hardDrop, landed, lock, lineClear, tetris, gameStart, gameOver). Asset lives in `Assets/Project/ScriptableObjects/SoundSettings.asset`.
   - `SoundUI.cs` — Glue between UI controls and `SoundManager`. On `Start()` syncs slider values to current `SoundManager` state and populates the track dropdown from `SoundManager.TrackNames`. Registers/unregisters UI callbacks in `OnEnable`/`OnDisable`.
+  - `GameOverUI.cs` — Full-screen game-over overlay. Subscribes to `GameManager.OnGameOver` in `Awake`/`OnDestroy` (not `OnEnable`/`OnDisable`) so the listener survives while the panel is hidden. Fades in over `fadeDuration` seconds via a `CanvasGroup`. Supports Up/Down arrow keyboard navigation between Restart and Quit buttons; Enter/Space activates the selection. Selected button is highlighted gold; unselected is dark gray.
 - **`Assets/Project/Input/`** — Input configuration.
   - `TetrisInput.inputactions` — Unity Input System action definitions. Gameplay map: MoveLeft, MoveRight, SoftDrop, HardDrop, RotateClockwise, RotateCounterClockwise. Debug map: ToggleGravity (editor-only). Supports rebinding.
   - `TetrisInput.cs` — Auto-generated C# wrapper (do not edit manually).
@@ -63,11 +64,19 @@ Board (world pos 4.5, 9.5)         — SpriteRenderer (tiled Grid.png, 10x20, so
         ├── Block 2
         └── Block 3
 SoundManager (world pos 0, 0)      — SoundManager.cs; two AudioSources added at runtime
-SoundCanvas (Screen Space Overlay) — Canvas + CanvasScaler + GraphicRaycaster
-  └── AudioPanel                   — Image (semi-transparent bg) + SoundUI.cs
-        ├── MusicVolumeSlider       — UnityEngine.UI.Slider [0, 1]
-        ├── SfxVolumeSlider         — UnityEngine.UI.Slider [0, 1]
-        └── MusicTrackDropdown      — TMP_Dropdown (populated at runtime)
+EventSystem                        — EventSystem + InputSystemUIInputModule (required for UI clicks)
+UICanvas (Screen Space Overlay)    — Canvas + CanvasScaler + GraphicRaycaster
+  ├── AudioPanel (inactive)        — Image (semi-transparent bg) + SoundUI.cs; hidden until an Options menu is added
+  │     ├── MusicVolumeSlider       — UnityEngine.UI.Slider [0, 1]
+  │     ├── SfxVolumeSlider         — UnityEngine.UI.Slider [0, 1]
+  │     └── MusicTrackDropdown      — TMP_Dropdown (populated at runtime)
+  └── GameOverPanel                — RectTransform (full-screen), CanvasGroup, GameOverUI.cs
+        ├── Dim                     — Image black α=0.8, full-screen
+        ├── GameOverText            — TextMeshProUGUI "GAME OVER"
+        ├── RestartButton           — Button + Image (gray/gold when selected)
+        │     └── Label             — TextMeshProUGUI "Restart"
+        └── QuitButton              — Button + Image (gray/gold when selected)
+              └── Label             — TextMeshProUGUI "Quit"
 ```
 
 ### Data Flow

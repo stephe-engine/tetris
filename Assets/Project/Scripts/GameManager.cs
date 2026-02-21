@@ -92,6 +92,28 @@ namespace Project.Scripts
         }
 
         /// <summary>
+        /// Resets all game state and starts a fresh game. Stops any in-progress
+        /// coroutines (lock, flash), clears the board, and spawns the first piece.
+        /// Fires <see cref="OnGameStart"/> so subscribers (e.g. <see cref="SoundManager"/>)
+        /// restart music.
+        /// </summary>
+        public void Restart()
+        {
+            StopAllCoroutines();
+
+            gameOver = false;
+            clearing = false;
+            grounded = false;
+            stepTimer = 0f;
+            lockTimer = 0f;
+            gravityEnabled = true;
+
+            board.ResetBoard();
+            board.SpawnPiece();
+            OnGameStart?.Invoke();
+        }
+
+        /// <summary>
         /// Toggles automatic gravity on or off. Editor-only debug feature.
         /// When gravity is re-enabled, the step timer resets to avoid an
         /// immediate catch-up step.

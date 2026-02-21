@@ -383,6 +383,46 @@ namespace Project.Scripts
         }
 
         /// <summary>
+        /// Resets the board to a clean state for a new game. Destroys all locked
+        /// blocks, clears the cell grid, removes the ghost and preview, and resets
+        /// the spawn strategy.
+        /// </summary>
+        public void ResetBoard()
+        {
+            // Destroy all locked block GameObjects and zero the grid
+            for (int x = 0; x < width; x++)
+            {
+                for (int y = 0; y < height; y++)
+                {
+                    if (lockedBlocks[x, y])
+                    {
+                        Destroy(lockedBlocks[x, y]);
+                        lockedBlocks[x, y] = null;
+                    }
+                    cells[x, y] = 0;
+                }
+            }
+
+            ClearGhostPiece();
+            ClearPreview();
+
+            if (previewPanel)
+            {
+                Destroy(previewPanel);
+                previewPanel = null;
+            }
+
+            if (activePiece)
+            {
+                Destroy(activePiece.gameObject);
+                activePiece = null;
+            }
+
+            nextType = null;
+            spawnStrategy.Reset();
+        }
+
+        /// <summary>
         /// Updates the next-piece preview display. Creates the background panel
         /// on first call, and recreates the preview blocks each time.
         /// </summary>
