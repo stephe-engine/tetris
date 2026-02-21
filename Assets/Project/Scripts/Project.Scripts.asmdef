@@ -3,7 +3,8 @@
     "rootNamespace": "Project.Scripts",
     "references": [
         "Unity.InputSystem",
-        "Project.Input"
+        "Project.Input",
+        "Unity.TextMeshPro"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

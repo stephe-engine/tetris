@@ -21,6 +21,33 @@ namespace Project.Scripts
         /// <summary>Time in seconds a piece sits on a surface before locking.</summary>
         [SerializeField] private float lockDelay = 0.5f;
 
+        /// <summary>Fired once when the game starts and the first piece spawns.</summary>
+        public event System.Action OnGameStart;
+
+        /// <summary>Fired when the game ends (top-out).</summary>
+        public event System.Action OnGameOver;
+
+        /// <summary>Fired each time the active piece successfully moves left or right.</summary>
+        public event System.Action OnMove;
+
+        /// <summary>Fired each time the active piece successfully rotates.</summary>
+        public event System.Action OnRotate;
+
+        /// <summary>Fired each time the active piece successfully soft-drops one row.</summary>
+        public event System.Action OnSoftDrop;
+
+        /// <summary>Fired when the player triggers a hard drop.</summary>
+        public event System.Action OnHardDrop;
+
+        /// <summary>Fired the first time a falling piece contacts a surface (lock delay begins).</summary>
+        public event System.Action OnLanded;
+
+        /// <summary>Fired when a piece permanently locks onto the board.</summary>
+        public event System.Action OnLock;
+
+        /// <summary>Fired after line clearing completes. Parameter is the number of lines cleared.</summary>
+        public event System.Action<int> OnLineClear;
+
         private float stepTimer;
         private float lockTimer;
         private bool grounded;
@@ -31,6 +58,7 @@ namespace Project.Scripts
         private void Start()
         {
             board.SpawnPiece();
+            OnGameStart?.Invoke();
         }
 
         private void Update()
@@ -94,6 +122,7 @@ namespace Project.Scripts
                 // Piece was already at rest but gravity just discovered it
                 grounded = true;
                 lockTimer = lockDelay;
+                OnLanded?.Invoke();
             }
         }
 
@@ -104,13 +133,15 @@ namespace Project.Scripts
         private IEnumerator LockAndSpawn()
         {
             board.LockPiece();
+            OnLock?.Invoke();
 
             List<int> fullRows = board.FindFullRows();
 
             if (fullRows.Count > 0)
             {
                 clearing = true;
-                yield return board.FlashRows(fullRows);
+                int lineCount = fullRows.Count;
+                yield return board.FlashRows(fullRows, () => OnLineClear?.Invoke(lineCount));
                 board.ClearAndCollapseRows(fullRows);
                 clearing = false;
             }
@@ -120,7 +151,8 @@ namespace Project.Scripts
             if (!IsActivePieceValid())
             {
                 gameOver = true;
-                Debug.Log("Game Over");
+                OnGameOver?.Invoke();
+                Debug.Log("Game O-ver");
             }
         }
 
@@ -140,6 +172,7 @@ namespace Project.Scripts
                 case GameCommand.MoveLeft:
                     if (MovePiece(Vector2Int.left))
                     {
+                        OnMove?.Invoke();
                         UpdateGroundedState();
                         board.UpdateGhostPiece();
                     }
@@ -148,6 +181,7 @@ namespace Project.Scripts
                 case GameCommand.MoveRight:
                     if (MovePiece(Vector2Int.right))
                     {
+                        OnMove?.Invoke();
                         UpdateGroundedState();
                         board.UpdateGhostPiece();
                     }
@@ -156,6 +190,7 @@ namespace Project.Scripts
                 case GameCommand.SoftDrop:
                     if (MovePiece(Vector2Int.down))
                     {
+                        OnSoftDrop?.Invoke();
                         stepTimer = 0f; // Reset gravity so it doesn't stack with soft drop
                         UpdateGroundedState();
                         board.UpdateGhostPiece();
@@ -164,6 +199,7 @@ namespace Project.Scripts
 
                 case GameCommand.HardDrop:
                     while (MovePiece(Vector2Int.down)) { }
+                    OnHardDrop?.Invoke();
                     grounded = false;
                     StartCoroutine(LockAndSpawn());
                     break;
@@ -171,6 +207,7 @@ namespace Project.Scripts
                 case GameCommand.RotateClockwise:
                     if (RotatePiece(1))
                     {
+                        OnRotate?.Invoke();
                         UpdateGroundedState();
                         board.UpdateGhostPiece();
                     }
@@ -179,6 +216,7 @@ namespace Project.Scripts
                 case GameCommand.RotateCounterClockwise:
                     if (RotatePiece(-1))
                     {
+                        OnRotate?.Invoke();
                         UpdateGroundedState();
                         board.UpdateGhostPiece();
                     }
@@ -312,8 +350,11 @@ namespace Project.Scripts
             }
             else
             {
+                bool wasGrounded = grounded;
                 grounded = true;
                 lockTimer = lockDelay;
+                if (!wasGrounded)
+                    OnLanded?.Invoke();
             }
         }
 

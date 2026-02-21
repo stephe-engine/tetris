@@ -200,7 +200,8 @@ namespace Project.Scripts
         /// original color. Blinks <see cref="flashCount"/> times over <see cref="flashDuration"/> seconds.
         /// </summary>
         /// <param name="rows">Row indices (array indices) to flash.</param>
-        public IEnumerator FlashRows(List<int> rows)
+        /// <param name="onHide">Optional callback invoked each time blocks are hidden.</param>
+        public IEnumerator FlashRows(List<int> rows, System.Action onHide = null)
         {
             float interval = flashDuration / (flashCount * 2);
 
@@ -228,6 +229,7 @@ namespace Project.Scripts
                 {
                     sr.color = Color.clear;
                 }
+                onHide?.Invoke();
                 yield return new WaitForSeconds(interval);
 
                 // Restore original color (show blocks)

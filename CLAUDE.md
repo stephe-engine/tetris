@@ -25,15 +25,19 @@ This is a Unity project — it is opened and built through the Unity Editor, not
   - `Piece.cs` — Active falling tetromino. Manages grid position, cell offsets, rotation state (`RotationIndex` 0–3), and renders via child SpriteRenderer GameObjects.
   - `TetrominoData.cs` — Static data: `Tetromino` enum (7 piece types), `Data` class (cell offsets, spawn position, rotation states, SRS wall kick tables).
   - `GameCommand.cs` — Enum of commands (MoveLeft, MoveRight, SoftDrop, HardDrop, RotateClockwise, RotateCounterClockwise). Abstraction boundary between input and game logic.
-  - `GameManager.cs` — Top-level game orchestrator. Owns gravity timing, lock delay, command execution, rotation with SRS wall kicks, and game flow. Does NOT own input. Has an editor-only `ToggleGravity()` debug method. Uses a `LockAndSpawn()` coroutine for the lock → flash → clear → spawn sequence, pausing gravity and input during the animation. Hard drop instantly moves piece to bottom and locks (no lock delay). Calls `board.UpdateGhostPiece()` after every successful move, rotation, or gravity step.
+  - `GameManager.cs` — Top-level game orchestrator. Owns gravity timing, lock delay, command execution, rotation with SRS wall kicks, and game flow. Does NOT own input. Has an editor-only `ToggleGravity()` debug method. Uses a `LockAndSpawn()` coroutine for the lock → flash → clear → spawn sequence, pausing gravity and input during the animation. Hard drop instantly moves piece to bottom and locks (no lock delay). Calls `board.UpdateGhostPiece()` after every successful move, rotation, or gravity step. Fires C# events for every meaningful game moment: `OnGameStart`, `OnGameOver`, `OnMove`, `OnRotate`, `OnSoftDrop`, `OnHardDrop`, `OnLanded`, `OnLock`, and `OnLineClear(int lines)`.
   - `InputHandler.cs` — Reads Unity Input System actions and translates them into `GameCommand`s. Implements hold-to-repeat (holdDelay + holdRepeatRate) for Tetris-standard key repeat. Rotation and hard drop are one-shot (no repeat). Debug action map (`#if UNITY_EDITOR`) handles dev-only keybinds.
+  - `SoundManager.cs` — Manages all audio. Subscribes to `GameManager` events and plays the matching SFX clip. Owns two `AudioSource` components created at runtime: one looping music source and one one-shot SFX source. Exposes `SetMusicVolume()`, `SetSfxVolume()`, and `SetMusicTrack()` (with fade). Track switching fades out/in over 0.5 s via a coroutine.
+  - `SoundSettings.cs` — `ScriptableObject` data container (`[CreateAssetMenu(menuName = "Tetris/Sound Settings")]`). Holds `musicTracks[]`, `musicTrackNames[]`, `defaultMusicTrackIndex`, `defaultMusicVolume`, `defaultSfxVolume`, and individual SFX clips for every game event (move, rotate, softDrop, hardDrop, landed, lock, lineClear, tetris, gameStart, gameOver). Asset lives in `Assets/Project/ScriptableObjects/SoundSettings.asset`.
+  - `SoundUI.cs` — Glue between UI controls and `SoundManager`. On `Start()` syncs slider values to current `SoundManager` state and populates the track dropdown from `SoundManager.TrackNames`. Registers/unregisters UI callbacks in `OnEnable`/`OnDisable`.
 - **`Assets/Project/Input/`** — Input configuration.
   - `TetrisInput.inputactions` — Unity Input System action definitions. Gameplay map: MoveLeft, MoveRight, SoftDrop, HardDrop, RotateClockwise, RotateCounterClockwise. Debug map: ToggleGravity (editor-only). Supports rebinding.
   - `TetrisInput.cs` — Auto-generated C# wrapper (do not edit manually).
-- **`Assets/Project/ScriptableObjects/`** — ScriptableObject assets (spawn strategies, etc.).
+- **`Assets/Project/ScriptableObjects/`** — ScriptableObject assets (spawn strategies, SoundSettings, etc.).
 - **`Assets/Project/Tests/EditMode/`** — EditMode unit tests (NUnit). Tests for `TetrominoData`, `BagRandomStrategy`, `Board`, `Piece`, and `GameManager`.
 - **`Assets/Project/Scenes/Gameplay.unity`** — Main game scene with Board GameObject (at 4.5, 9.5) and 2D camera.
 - **`Assets/Project/Sprites/`** — Game sprites (Grid.png used as tiled board background, PreviewPanel.png used as 9-sliced next-piece preview background).
+- **`Assets/Project/Sound/`** — Audio assets. `Music/` holds looping background tracks (MP3). `SFX/` holds one-shot effect clips (WAV).
 - **`Assets/Project/Prefabs/`** — Reusable prefabs (empty, to be populated).
 - **`Assets/Plugins/Chess Studio/Puzzle Blocks Icon Pack/`** — Asset Store block sprites. Using the "Stone" variants (e.g. `lightBlueStone.png`, `redStone.png`) for tetromino blocks.
 
@@ -58,6 +62,12 @@ Board (world pos 4.5, 9.5)         — SpriteRenderer (tiled Grid.png, 10x20, so
         ├── Block 1
         ├── Block 2
         └── Block 3
+SoundManager (world pos 0, 0)      — SoundManager.cs; two AudioSources added at runtime
+SoundCanvas (Screen Space Overlay) — Canvas + CanvasScaler + GraphicRaycaster
+  └── AudioPanel                   — Image (semi-transparent bg) + SoundUI.cs
+        ├── MusicVolumeSlider       — UnityEngine.UI.Slider [0, 1]
+        ├── SfxVolumeSlider         — UnityEngine.UI.Slider [0, 1]
+        └── MusicTrackDropdown      — TMP_Dropdown (populated at runtime)
 ```
 
 ### Data Flow
@@ -88,7 +98,7 @@ The Board's local origin is the center of the grid. Grid bounds are x: -5 to 5, 
 - Files under `Library/`, `Temp/`, `obj/` are auto-generated and git-ignored.
 
 ### Assembly Definitions
-- **`Project.Scripts`** (`Assets/Project/Scripts/`) — game code. References `Unity.InputSystem` and `Project.Input`.
+- **`Project.Scripts`** (`Assets/Project/Scripts/`) — game code. References `Unity.InputSystem`, `Project.Input`, and `Unity.TextMeshPro`.
 - **`Project.Input`** (`Assets/Project/Input/`) — auto-generated Input System wrapper (`TetrisInput.cs`). References `Unity.InputSystem`.
 - **`Project.Scripts.EditMode.Tests`** (`Assets/Project/Tests/EditMode/`) — EditMode tests. References `Project.Scripts`, `UnityEngine.TestRunner`, `UnityEditor.TestRunner`, and `nunit.framework.dll`. Editor-only, gated by `UNITY_INCLUDE_TESTS`.
 
@@ -134,7 +144,8 @@ The Board's local origin is the center of the grid. Grid bounds are x: -5 to 5, 
 
 ### Line Clear Animation
 - Line clearing is a two-phase process: detect full rows, then flash, then clear.
-- `Board.FindFullRows()` detects without mutating. `Board.FlashRows()` is a coroutine that blinks rows (toggling `SpriteRenderer.color` between clear and original). `Board.ClearAndCollapseRows()` destroys and collapses.
+- `Board.FindFullRows()` detects without mutating. `Board.FlashRows(rows, onHide)` is a coroutine that blinks rows (toggling `SpriteRenderer.color` between clear and original); the optional `onHide` callback fires each time blocks are hidden. `Board.ClearAndCollapseRows()` destroys and collapses.
+- `GameManager` passes `() => OnLineClear?.Invoke(lineCount)` as `onHide`, so the line-clear sound fires in sync with each blink rather than once before the animation.
 - During the flash, a `clearing` flag pauses both gravity and input in `GameManager`.
 - Flash timing (`flashDuration`, `flashCount`) is Inspector-tunable on the Board component.
 
@@ -162,6 +173,14 @@ The Board's local origin is the center of the grid. Grid bounds are x: -5 to 5, 
 - ScriptableObjects persist state between play sessions in the editor, so `Board.Awake()` calls `spawnStrategy.Reset()` to ensure clean state.
 - New strategies: extend `SpawnStrategy`, add `[CreateAssetMenu]`, create an asset in `Assets/Project/ScriptableObjects/`, and assign to Board in the Inspector.
 - ScriptableObject assets go in `Assets/Project/ScriptableObjects/`.
+
+### Sound System
+- `SoundManager` subscribes to `GameManager` C# events (`OnEnable`/`OnDisable`) and plays SFX via `AudioSource.PlayOneShot()` so clips can overlap freely.
+- All clips and default volumes live in a `SoundSettings` ScriptableObject asset. Assign it to `SoundManager.settings` in the Inspector.
+- `HandleLineClear(int lines)` plays `sfxTetris` for 4-line clears and `sfxLineClear` otherwise.
+- Music playback uses a second looping `AudioSource`. `SetMusicTrack(index)` cross-fades between tracks with a 0.5 s coroutine.
+- `SoundUI` wires Unity UI sliders and a `TMP_Dropdown` to `SoundManager`; it populates the dropdown from `SoundManager.TrackNames` at runtime. Volume sliders initialize from `SoundManager.MusicVolume` / `SfxVolume` so they reflect the ScriptableObject defaults on first load.
+- Audio clips live in `Assets/Project/Sound/Music/` (MP3, looping) and `Assets/Project/Sound/SFX/` (WAV, one-shot).
 
 ### Rotation System
 - **Super Rotation System (SRS):** All 7 pieces have 4 rotation states (0–3). O-piece rotation is skipped (all states identical).
