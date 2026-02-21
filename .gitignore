@@ -106,3 +106,6 @@ InitTestScene*.unity*
 
 # Claude Folder
 .claude/
+
+# Unity crash recovery scenes
+/[Aa]ssets/_[Rr]ecovery/
