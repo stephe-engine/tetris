@@ -57,5 +57,19 @@ namespace Project.Scripts
 
         /// <summary>Plays when the game ends (top-out).</summary>
         [SerializeField] public AudioClip sfxGameOver;
+
+        [Header("Pause Menu SFX")]
+
+        /// <summary>Plays when the pause menu opens.</summary>
+        [SerializeField] public AudioClip sfxPauseOpen;
+
+        /// <summary>Plays when the pause menu closes (resume).</summary>
+        [SerializeField] public AudioClip sfxPauseClose;
+
+        /// <summary>Plays when navigating between menu items.</summary>
+        [SerializeField] public AudioClip sfxMenuNavigate;
+
+        /// <summary>Plays when a menu item is activated.</summary>
+        [SerializeField] public AudioClip sfxMenuSelect;
     }
 }

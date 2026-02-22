@@ -14,6 +14,9 @@ namespace Project.Scripts
         /// <summary>Reference to the GameManager that receives commands.</summary>
         [SerializeField] private GameManager gameManager;
 
+        /// <summary>Pause menu UI toggled by Escape.</summary>
+        [SerializeField] private PauseMenuUI pauseMenuUI;
+
         /// <summary>Delay in seconds before auto-repeat starts when holding a key.</summary>
         [SerializeField] private float holdDelay = 0.17f;
 
@@ -57,6 +60,18 @@ namespace Project.Scripts
 
         private void Update()
         {
+            // Escape opens pause menu — read directly (not via input actions) so it cannot be rebound
+            if (Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame)
+            {
+                if (pauseMenuUI && !pauseMenuUI.IsOpen)
+                    pauseMenuUI.Open();
+                return;  // consume frame; pause UI hierarchy handles Escape while open
+            }
+
+            // Block all game commands while paused
+            if (gameManager.IsPaused)
+                return;
+
             HandleRepeatableAction(inputActions.Gameplay.MoveLeft, GameCommand.MoveLeft,
                 ref holdTimerLeft, ref repeatTimerLeft);
             HandleRepeatableAction(inputActions.Gameplay.MoveRight, GameCommand.MoveRight,

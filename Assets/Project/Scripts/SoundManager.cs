@@ -73,6 +73,8 @@ namespace Project.Scripts
             gameManager.OnLanded += HandleLanded;
             gameManager.OnLock += HandleLock;
             gameManager.OnLineClear += HandleLineClear;
+            gameManager.OnPaused += HandlePaused;
+            gameManager.OnResumed += HandleResumed;
         }
 
         private void OnDisable()
@@ -89,6 +91,8 @@ namespace Project.Scripts
             gameManager.OnLanded -= HandleLanded;
             gameManager.OnLock -= HandleLock;
             gameManager.OnLineClear -= HandleLineClear;
+            gameManager.OnPaused -= HandlePaused;
+            gameManager.OnResumed -= HandleResumed;
         }
 
         // -------------------------------------------------------------------------
@@ -172,9 +176,31 @@ namespace Project.Scripts
             PlaySfx(lineCount >= 4 ? settings.sfxTetris : settings.sfxLineClear);
         }
 
+        private void HandlePaused()
+        {
+            musicSource.Pause();
+            PlaySfx(settings != null ? settings.sfxPauseOpen : null);
+        }
+
+        private void HandleResumed()
+        {
+            if (!musicSource.isPlaying)
+                musicSource.UnPause();
+            PlaySfx(settings != null ? settings.sfxPauseClose : null);
+        }
+
         // -------------------------------------------------------------------------
         // Helpers
         // -------------------------------------------------------------------------
+
+        /// <summary>
+        /// Plays a menu UI sound (navigate, select). Null-safe.
+        /// </summary>
+        /// <param name="clip">The clip to play. Silently ignored if null.</param>
+        public void PlayMenuSfx(AudioClip clip)
+        {
+            PlaySfx(clip);
+        }
 
         /// <summary>
         /// Plays the given clip as a one-shot SFX, allowing overlapping playback.

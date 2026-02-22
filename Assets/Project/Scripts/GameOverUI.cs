@@ -31,8 +31,8 @@ namespace Project.Scripts
         /// <summary>Duration in seconds for the fade-in animation.</summary>
         [SerializeField] private float fadeDuration = 0.5f;
 
-        private static readonly Color NormalColor   = new(0.35f, 0.35f, 0.35f, 1f);
-        private static readonly Color SelectedColor = new(0.75f, 0.65f, 0.20f, 1f); // gold highlight
+        [SerializeField] private Color normalColor   = new(0.35f, 0.35f, 0.35f, 1f);
+        [SerializeField] private Color selectedColor = new(0.75f, 0.65f, 0.20f, 1f);
 
         private Button[] buttons;
         private int selectedIndex;
@@ -55,6 +55,10 @@ namespace Project.Scripts
             buttons = new Button[] { restartButton, quitButton };
             restartButton.onClick.AddListener(OnRestartClicked);
             quitButton.onClick.AddListener(OnQuitClicked);
+
+            foreach (Button btn in buttons)
+                btn.transition = Selectable.Transition.None;
+
             panel.SetActive(false);
         }
 
@@ -85,7 +89,7 @@ namespace Project.Scripts
             for (int i = 0; i < buttons.Length; i++)
             {
                 Image img = buttons[i].GetComponent<Image>();
-                img.color = i == selectedIndex ? SelectedColor : NormalColor;
+                img.color = i == selectedIndex ? selectedColor : normalColor;
             }
         }
 

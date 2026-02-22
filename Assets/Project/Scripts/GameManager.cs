@@ -48,12 +48,25 @@ namespace Project.Scripts
         /// <summary>Fired after line clearing completes. Parameter is the number of lines cleared.</summary>
         public event System.Action<int> OnLineClear;
 
+        /// <summary>Fired when the game is paused.</summary>
+        public event System.Action OnPaused;
+
+        /// <summary>Fired when the game is resumed from pause.</summary>
+        public event System.Action OnResumed;
+
+        /// <summary>True while the game is paused.</summary>
+        public bool IsPaused => paused;
+
+        /// <summary>True after the player has topped out and the game is over.</summary>
+        public bool IsGameOver => gameOver;
+
         private float stepTimer;
         private float lockTimer;
         private bool grounded;
         private bool gravityEnabled = true;
         private bool gameOver;
         private bool clearing;
+        private bool paused;
 
         private void Start()
         {
@@ -63,7 +76,7 @@ namespace Project.Scripts
 
         private void Update()
         {
-            if (gameOver || clearing)
+            if (gameOver || clearing || paused)
                 return;
 
             // Lock delay timer runs independently of gravity
@@ -104,6 +117,7 @@ namespace Project.Scripts
             gameOver = false;
             clearing = false;
             grounded = false;
+            paused = false;
             stepTimer = 0f;
             lockTimer = 0f;
             gravityEnabled = true;
@@ -111,6 +125,25 @@ namespace Project.Scripts
             board.ResetBoard();
             board.SpawnPiece();
             OnGameStart?.Invoke();
+        }
+
+        /// <summary>Pauses gameplay. Fires <see cref="OnPaused"/>.</summary>
+        public void Pause()
+        {
+            if (gameOver || paused)
+                return;
+            paused = true;
+            OnPaused?.Invoke();
+        }
+
+        /// <summary>Resumes gameplay. Resets timers to prevent catch-up. Fires <see cref="OnResumed"/>.</summary>
+        public void Resume()
+        {
+            if (!paused)
+                return;
+            paused = false;
+            stepTimer = 0f;
+            OnResumed?.Invoke();
         }
 
         /// <summary>
@@ -186,7 +219,7 @@ namespace Project.Scripts
         /// <param name="command">The command to execute.</param>
         public void ExecuteCommand(GameCommand command)
         {
-            if (gameOver || clearing)
+            if (gameOver || clearing || paused)
                 return;
 
             switch (command)

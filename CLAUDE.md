@@ -25,12 +25,15 @@ This is a Unity project — it is opened and built through the Unity Editor, not
   - `Piece.cs` — Active falling tetromino. Manages grid position, cell offsets, rotation state (`RotationIndex` 0–3), and renders via child SpriteRenderer GameObjects.
   - `TetrominoData.cs` — Static data: `Tetromino` enum (7 piece types), `Data` class (cell offsets, spawn position, rotation states, SRS wall kick tables).
   - `GameCommand.cs` — Enum of commands (MoveLeft, MoveRight, SoftDrop, HardDrop, RotateClockwise, RotateCounterClockwise). Abstraction boundary between input and game logic.
-  - `GameManager.cs` — Top-level game orchestrator. Owns gravity timing, lock delay, command execution, rotation with SRS wall kicks, and game flow. Does NOT own input. Has an editor-only `ToggleGravity()` debug method. Uses a `LockAndSpawn()` coroutine for the lock → flash → clear → spawn sequence, pausing gravity and input during the animation. Hard drop instantly moves piece to bottom and locks (no lock delay). Calls `board.UpdateGhostPiece()` after every successful move, rotation, or gravity step. Fires C# events for every meaningful game moment: `OnGameStart`, `OnGameOver`, `OnMove`, `OnRotate`, `OnSoftDrop`, `OnHardDrop`, `OnLanded`, `OnLock`, and `OnLineClear(int lines)`.
-  - `InputHandler.cs` — Reads Unity Input System actions and translates them into `GameCommand`s. Implements hold-to-repeat (holdDelay + holdRepeatRate) for Tetris-standard key repeat. Rotation and hard drop are one-shot (no repeat). Debug action map (`#if UNITY_EDITOR`) handles dev-only keybinds.
-  - `SoundManager.cs` — Manages all audio. Subscribes to `GameManager` events and plays the matching SFX clip. Owns two `AudioSource` components created at runtime: one looping music source and one one-shot SFX source. Exposes `SetMusicVolume()`, `SetSfxVolume()`, and `SetMusicTrack()` (with fade). Track switching fades out/in over 0.5 s via a coroutine.
-  - `SoundSettings.cs` — `ScriptableObject` data container (`[CreateAssetMenu(menuName = "Tetris/Sound Settings")]`). Holds `musicTracks[]`, `musicTrackNames[]`, `defaultMusicTrackIndex`, `defaultMusicVolume`, `defaultSfxVolume`, and individual SFX clips for every game event (move, rotate, softDrop, hardDrop, landed, lock, lineClear, tetris, gameStart, gameOver). Asset lives in `Assets/Project/ScriptableObjects/SoundSettings.asset`.
+  - `GameManager.cs` — Top-level game orchestrator. Owns gravity timing, lock delay, command execution, rotation with SRS wall kicks, and game flow. Does NOT own input. Has an editor-only `ToggleGravity()` debug method. Uses a `LockAndSpawn()` coroutine for the lock → flash → clear → spawn sequence, pausing gravity and input during the animation. Hard drop instantly moves piece to bottom and locks (no lock delay). Calls `board.UpdateGhostPiece()` after every successful move, rotation, or gravity step. Fires C# events for every meaningful game moment: `OnGameStart`, `OnGameOver`, `OnMove`, `OnRotate`, `OnSoftDrop`, `OnHardDrop`, `OnLanded`, `OnLock`, `OnLineClear(int lines)`, `OnPaused`, and `OnResumed`. Exposes `IsPaused` and `IsGameOver` read-only properties. `Pause()` and `Resume()` guard against double-calls and game-over state; `Resume()` resets `stepTimer` to prevent gravity catch-up.
+  - `InputHandler.cs` — Reads Unity Input System actions and translates them into `GameCommand`s. Implements hold-to-repeat (holdDelay + holdRepeatRate) for Tetris-standard key repeat. Rotation and hard drop are one-shot (no repeat). Debug action map (`#if UNITY_EDITOR`) handles dev-only keybinds. Escape is read directly via `Keyboard.current` (not via input actions) so it cannot be rebound — it opens `PauseMenuUI` when the game is running and the menu is not already open. All gameplay commands are suppressed while `gameManager.IsPaused` is true.
+  - `SoundManager.cs` — Manages all audio. Subscribes to `GameManager` events and plays the matching SFX clip. Owns two `AudioSource` components created at runtime: one looping music source and one one-shot SFX source. Exposes `SetMusicVolume()`, `SetSfxVolume()`, and `SetMusicTrack()` (with fade). Track switching fades out/in over 0.5 s via a coroutine. `HandlePaused()` calls `musicSource.Pause()` (preserves playback position); `HandleResumed()` calls `musicSource.UnPause()` with an `isPlaying` guard for the edge case where a track crossfade ran while paused. Exposes `PlayMenuSfx(AudioClip)` for UI navigation sounds.
+  - `SoundSettings.cs` — `ScriptableObject` data container (`[CreateAssetMenu(menuName = "Tetris/Sound Settings")]`). Holds `musicTracks[]`, `musicTrackNames[]`, `defaultMusicTrackIndex`, `defaultMusicVolume`, `defaultSfxVolume`, and individual SFX clips for every game event (move, rotate, softDrop, hardDrop, landed, lock, lineClear, tetris, gameStart, gameOver). Also holds 4 pause menu SFX clips: `sfxPauseOpen`, `sfxPauseClose`, `sfxMenuNavigate`, `sfxMenuSelect`. Asset lives in `Assets/Project/ScriptableObjects/SoundSettings.asset`.
   - `SoundUI.cs` — Glue between UI controls and `SoundManager`. On `Start()` syncs slider values to current `SoundManager` state and populates the track dropdown from `SoundManager.TrackNames`. Registers/unregisters UI callbacks in `OnEnable`/`OnDisable`.
-  - `GameOverUI.cs` — Full-screen game-over overlay. Subscribes to `GameManager.OnGameOver` in `Awake`/`OnDestroy` (not `OnEnable`/`OnDisable`) so the listener survives while the panel is hidden. Fades in over `fadeDuration` seconds via a `CanvasGroup`. Supports Up/Down arrow keyboard navigation between Restart and Quit buttons; Enter/Space activates the selection. Selected button is highlighted gold; unselected is dark gray.
+  - `GameOverUI.cs` — Full-screen game-over overlay. Subscribes to `GameManager.OnGameOver` in `Awake`/`OnDestroy` (not `OnEnable`/`OnDisable`) so the listener survives while the panel is hidden. Fades in over `fadeDuration` seconds via a `CanvasGroup`. Supports Up/Down arrow keyboard navigation between Restart and Quit buttons; Enter/Space activates the selection. Button colors (`normalColor`, `selectedColor`) are Inspector-configurable `[SerializeField]` fields; `Button.transition` is set to `None` in `Start()` so Unity's built-in color system does not fight the script-driven coloring.
+  - `PauseMenuUI.cs` — Full-screen pause overlay. Opened by `InputHandler` on Escape (only when `!IsGameOver`). Fades in via `CanvasGroup`. Supports Up/Down/Enter/Space keyboard navigation across Resume, Options, and Quit buttons. Escape while open calls `Close()` which force-closes any sub-panels and calls `gameManager.Resume()`. Button colors (`selectedColor`, `unselectedColor`) are Inspector-configurable; `Button.transition = None` is set in `Awake()`. Initialization (button array + listeners + transition mode) is done in `Awake()` — not `Start()` — because the panel starts inactive and `Start()` would be deferred until after the first `Open()` call activates it.
+  - `OptionsMenuUI.cs` — Options sub-panel shown from the pause menu. Provides a Sound button (shows AudioPanel) and a disabled Keybindings placeholder. AudioPanel is a child of OptionsMenuPanel; when showing AudioPanel the parent panel stays active (only AudioPanel is toggled) so AudioPanel's `activeInHierarchy` is true and `SoundPanelEscape` can run. Same `Awake()` initialization pattern as `PauseMenuUI`. Button colors are Inspector-configurable.
+  - `SoundPanelEscape.cs` — Tiny shim on the AudioPanel. Routes Escape back to `OptionsMenuUI.OnAudioPanelBack()`. Only active when AudioPanel is active (Unity's `SetActive` semantics).
 - **`Assets/Project/Input/`** — Input configuration.
   - `TetrisInput.inputactions` — Unity Input System action definitions. Gameplay map: MoveLeft, MoveRight, SoftDrop, HardDrop, RotateClockwise, RotateCounterClockwise. Debug map: ToggleGravity (editor-only). Supports rebinding.
   - `TetrisInput.cs` — Auto-generated C# wrapper (do not edit manually).
@@ -66,17 +69,39 @@ Board (world pos 4.5, 9.5)         — SpriteRenderer (tiled Grid.png, 10x20, so
 SoundManager (world pos 0, 0)      — SoundManager.cs; two AudioSources added at runtime
 EventSystem                        — EventSystem + InputSystemUIInputModule (required for UI clicks)
 UICanvas (Screen Space Overlay)    — Canvas + CanvasScaler + GraphicRaycaster
-  ├── AudioPanel (inactive)        — Image (semi-transparent bg) + SoundUI.cs; hidden until an Options menu is added
-  │     ├── MusicVolumeSlider       — UnityEngine.UI.Slider [0, 1]
-  │     ├── SfxVolumeSlider         — UnityEngine.UI.Slider [0, 1]
-  │     └── MusicTrackDropdown      — TMP_Dropdown (populated at runtime)
-  └── GameOverPanel                — RectTransform (full-screen), CanvasGroup, GameOverUI.cs
-        ├── Dim                     — Image black α=0.8, full-screen
-        ├── GameOverText            — TextMeshProUGUI "GAME OVER"
-        ├── RestartButton           — Button + Image (gray/gold when selected)
-        │     └── Label             — TextMeshProUGUI "Restart"
-        └── QuitButton              — Button + Image (gray/gold when selected)
-              └── Label             — TextMeshProUGUI "Quit"
+  ├── GameOverPanel                — RectTransform (full-screen), CanvasGroup, GameOverUI.cs
+  │     ├── Dim                     — Image black α=0.8, full-screen
+  │     ├── GameOverText            — TextMeshProUGUI "GAME OVER"
+  │     ├── RestartButton           — Button + Image (gray/gold when selected), transition=None
+  │     │     └── Label             — TextMeshProUGUI "Restart"
+  │     └── QuitButton              — Button + Image (gray/gold when selected), transition=None
+  │           └── Label             — TextMeshProUGUI "Quit"
+  ├── PauseMenuPanel (inactive)    — RectTransform (full-screen), CanvasGroup, PauseMenuUI.cs
+  │     ├── Dim                     — Image black α=0.8, full-screen
+  │     ├── PausedText              — TextMeshProUGUI "-- Paused --"
+  │     ├── ResumeButton            — Button + Image (gray/gold when selected), transition=None
+  │     │     └── Label             — TextMeshProUGUI "Resume"
+  │     ├── OptionsButton           — Button + Image (gray/gold when selected), transition=None
+  │     │     └── Label             — TextMeshProUGUI "Options"
+  │     └── QuitButton              — Button + Image (gray/gold when selected), transition=None
+  │           └── Label             — TextMeshProUGUI "Quit"
+  └── OptionsMenuPanel (inactive)  — RectTransform (full-screen), OptionsMenuUI.cs
+        ├── Dim                     — Image black α=0.6, full-screen
+        ├── OptionsText             — TextMeshProUGUI "Options"
+        ├── SoundButton             — Button + Image (gray/gold when selected), transition=None
+        │     └── Label             — TextMeshProUGUI "Sound"
+        ├── KeybindingsButton       — Button + Image (disabled, non-interactable), transition=None
+        │     └── Label             — TextMeshProUGUI "Keybindings"
+        └── AudioPanel (inactive)  — Image (dark bg) + SoundUI.cs + SoundPanelEscape.cs
+              │                       centered 420×260 within OptionsMenuPanel
+              ├── Title              — TextMeshProUGUI "Sound Settings"
+              ├── MusicLabel         — TextMeshProUGUI "Music Vol"
+              ├── MusicVolumeSlider  — Slider [0,1] with Background/Fill/Handle children
+              ├── SfxLabel           — TextMeshProUGUI "SFX Vol"
+              ├── SfxVolumeSlider    — Slider [0,1] with Background/Fill/Handle children
+              ├── TrackLabel         — TextMeshProUGUI "Track"
+              ├── MusicTrackDropdown — TMP_Dropdown with Label/Arrow/Template children
+              └── HintText           — TextMeshProUGUI "[ Esc ] Back"
 ```
 
 ### Data Flow
@@ -182,6 +207,20 @@ The Board's local origin is the center of the grid. Grid bounds are x: -5 to 5, 
 - ScriptableObjects persist state between play sessions in the editor, so `Board.Awake()` calls `spawnStrategy.Reset()` to ensure clean state.
 - New strategies: extend `SpawnStrategy`, add `[CreateAssetMenu]`, create an asset in `Assets/Project/ScriptableObjects/`, and assign to Board in the Inspector.
 - ScriptableObject assets go in `Assets/Project/ScriptableObjects/`.
+
+### Pause Menu
+- Escape is hardcoded via `Keyboard.current` in `InputHandler` — never routed through input actions so it cannot be accidentally rebound.
+- `InputHandler` only opens the pause menu; closing is handled entirely within the UI hierarchy. When the root pause panel is open, `InputHandler.Update()` returns early after processing Escape, so no game commands fire while paused.
+- Only one panel is active at a time within the pause/options/sound hierarchy. AudioPanel is toggled independently while OptionsMenuPanel stays active (parent must remain active for children to render and run `Update()`).
+- Each panel initialises its button array and wires listeners in `Awake()`, not `Start()`. Panels start inactive in the scene, so `Awake()` is deferred until the first `SetActive(true)` call — which happens inside `Open()`. `Start()` would be deferred a further frame and would run after `RefreshSelection()` already needed the array.
+- `PauseMenuUI.Open()` guards against `gameManager.IsGameOver` so the pause menu cannot appear over the game-over overlay.
+- Keybindings button is a non-interactable placeholder. Future implementation: `KeybindingsUI.cs` + rebinding panel using `InputActionRebindingExtensions.PerformInteractiveRebinding()`.
+
+### Button Color Management
+- Menu buttons (pause, options, game-over panels) use script-driven `Image.color` assignment rather than Unity's `Button.colors` ColorBlock.
+- `Button.transition` is set to `Selectable.Transition.None` in `Awake()` so Unity's built-in color tinting does not conflict with the script-set colors.
+- Selected/unselected/disabled colors are exposed as `[SerializeField]` fields on each panel script, making them Inspector-configurable per panel.
+- **Planned migration:** Replace individual button GameObjects with a `MenuButton` prefab whose ColorBlock is configured once. The prefab approach scales better when adding borders, glow effects, or Animator-driven transitions. At that point, `Button.transition` reverts to `ColorTint`, the script sets `button.colors.normalColor` to switch gold/gray, and Unity handles hover/press tinting on top.
 
 ### Sound System
 - `SoundManager` subscribes to `GameManager` C# events (`OnEnable`/`OnDisable`) and plays SFX via `AudioSource.PlayOneShot()` so clips can overlap freely.
