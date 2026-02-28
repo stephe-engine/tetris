@@ -1,4 +1,5 @@
 using System.Collections;
+using TMPro;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.UI;
@@ -15,6 +16,12 @@ namespace Project.Scripts
     {
         /// <summary>Reference to the GameManager that fires game events.</summary>
         [SerializeField] private GameManager gameManager;
+
+        /// <summary>Reference to the ScoreManager for reading the final score.</summary>
+        [SerializeField] private ScoreManager scoreManager;
+
+        /// <summary>Label that displays the final score on the game-over overlay.</summary>
+        [SerializeField] private TextMeshProUGUI scoreText;
 
         /// <summary>Root GameObject of the overlay panel (same as this GameObject).</summary>
         [SerializeField] private GameObject panel;
@@ -95,6 +102,9 @@ namespace Project.Scripts
 
         private void HandleGameOver()
         {
+            if (scoreText && scoreManager)
+                scoreText.text = $"Score  {scoreManager.Score:N0}";
+
             panel.SetActive(true);
             canvasGroup.alpha = 0f;
             canvasGroup.interactable = false;

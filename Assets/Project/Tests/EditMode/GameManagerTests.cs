@@ -184,6 +184,55 @@ namespace Project.Scripts.EditMode.Tests
             Assert.AreEqual(1, piece.RotationIndex, "Rotation should succeed via wall kick");
         }
 
+        // ── Pause / Resume ───────────────────────────────────────────────────
+
+        [Test]
+        public void Pause_SetsPausedState()
+        {
+            manager.Pause();
+
+            Assert.IsTrue(manager.IsPaused);
+        }
+
+        [Test]
+        public void Resume_ClearsPausedState()
+        {
+            manager.Pause();
+            manager.Resume();
+
+            Assert.IsFalse(manager.IsPaused);
+        }
+
+        [Test]
+        public void Pause_WhenAlreadyPaused_IsNoOp()
+        {
+            manager.Pause();
+            manager.Pause(); // Second call is a no-op
+
+            Assert.IsTrue(manager.IsPaused);
+        }
+
+        [Test]
+        public void Resume_WhenNotPaused_IsNoOp()
+        {
+            manager.Resume(); // Calling when not paused is a no-op
+
+            Assert.IsFalse(manager.IsPaused);
+        }
+
+        [Test]
+        public void ExecuteCommand_WhilePaused_DoesNotMovePiece()
+        {
+            Piece piece = SpawnTestPiece(Tetromino.T, new Vector2Int(0, 0));
+
+            manager.Pause();
+            manager.ExecuteCommand(GameCommand.MoveLeft);
+
+            Assert.AreEqual(new Vector2Int(0, 0), piece.Position);
+        }
+
+        // ── Helpers ─────────────────────────────────────────────────────────
+
         /// <summary>Creates a Piece and sets it as the Board's active piece.</summary>
         private Piece SpawnTestPiece(Tetromino type, Vector2Int position)
         {

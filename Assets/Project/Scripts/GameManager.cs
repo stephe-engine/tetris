@@ -15,11 +15,16 @@ namespace Project.Scripts
         /// <summary>Reference to the game board that this manager controls.</summary>
         [SerializeField] private Board board;
 
-        /// <summary>Time in seconds between automatic gravity steps.</summary>
-        [SerializeField] private float stepDelay = 1.0f;
+        /// <summary>Reference to the ScoreManager whose level changes drive gravity speed.</summary>
+        [SerializeField] private ScoreManager scoreManager;
 
         /// <summary>Time in seconds a piece sits on a surface before locking.</summary>
         [SerializeField] private float lockDelay = 0.5f;
+
+        private const float MinStepDelay = 0.033f;
+
+        /// <summary>Time in seconds between automatic gravity steps. Set by level via OnLevelChanged.</summary>
+        private float stepDelay;
 
         /// <summary>Fired once when the game starts and the first piece spawns.</summary>
         public event System.Action OnGameStart;
@@ -45,8 +50,11 @@ namespace Project.Scripts
         /// <summary>Fired when a piece permanently locks onto the board.</summary>
         public event System.Action OnLock;
 
-        /// <summary>Fired after line clearing completes. Parameter is the number of lines cleared.</summary>
+        /// <summary>Fired once after line clearing completes. Parameter is the number of lines cleared.</summary>
         public event System.Action<int> OnLineClear;
+
+        /// <summary>Fired each time rows are hidden during the flash animation. Parameter is the number of lines cleared.</summary>
+        public event System.Action<int> OnLineClearBlink;
 
         /// <summary>Fired when the game is paused.</summary>
         public event System.Action OnPaused;
@@ -67,6 +75,16 @@ namespace Project.Scripts
         private bool gameOver;
         private bool clearing;
         private bool paused;
+
+        private void OnEnable()
+        {
+            scoreManager.OnLevelChanged += HandleLevelChanged;
+        }
+
+        private void OnDisable()
+        {
+            scoreManager.OnLevelChanged -= HandleLevelChanged;
+        }
 
         private void Start()
         {
@@ -147,6 +165,27 @@ namespace Project.Scripts
         }
 
         /// <summary>
+        /// Updates gravity speed when the level changes.
+        /// Subscribed to <see cref="ScoreManager.OnLevelChanged"/>.
+        /// </summary>
+        private void HandleLevelChanged(int level)
+        {
+            stepDelay = ComputeStepDelay(level);
+        }
+
+        /// <summary>
+        /// Computes the gravity step delay in seconds for the given level
+        /// using the Tetris Guideline formula.
+        /// </summary>
+        /// <param name="level">Level number (1-based).</param>
+        /// <returns>Step delay in seconds, clamped to a minimum of 0.033 s.</returns>
+        private static float ComputeStepDelay(int level)
+        {
+            float delay = Mathf.Pow(0.8f - (level - 1) * 0.007f, level - 1);
+            return Mathf.Max(delay, MinStepDelay);
+        }
+
+        /// <summary>
         /// Toggles automatic gravity on or off. Editor-only debug feature.
         /// When gravity is re-enabled, the step timer resets to avoid an
         /// immediate catch-up step.
@@ -196,7 +235,8 @@ namespace Project.Scripts
             {
                 clearing = true;
                 int lineCount = fullRows.Count;
-                yield return board.FlashRows(fullRows, () => OnLineClear?.Invoke(lineCount));
+                yield return board.FlashRows(fullRows, () => OnLineClearBlink?.Invoke(lineCount));
+                OnLineClear?.Invoke(lineCount);
                 board.ClearAndCollapseRows(fullRows);
                 clearing = false;
             }

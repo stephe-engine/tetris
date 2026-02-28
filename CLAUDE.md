@@ -25,12 +25,15 @@ This is a Unity project — it is opened and built through the Unity Editor, not
   - `Piece.cs` — Active falling tetromino. Manages grid position, cell offsets, rotation state (`RotationIndex` 0–3), and renders via child SpriteRenderer GameObjects.
   - `TetrominoData.cs` — Static data: `Tetromino` enum (7 piece types), `Data` class (cell offsets, spawn position, rotation states, SRS wall kick tables).
   - `GameCommand.cs` — Enum of commands (MoveLeft, MoveRight, SoftDrop, HardDrop, RotateClockwise, RotateCounterClockwise). Abstraction boundary between input and game logic.
-  - `GameManager.cs` — Top-level game orchestrator. Owns gravity timing, lock delay, command execution, rotation with SRS wall kicks, and game flow. Does NOT own input. Has an editor-only `ToggleGravity()` debug method. Uses a `LockAndSpawn()` coroutine for the lock → flash → clear → spawn sequence, pausing gravity and input during the animation. Hard drop instantly moves piece to bottom and locks (no lock delay). Calls `board.UpdateGhostPiece()` after every successful move, rotation, or gravity step. Fires C# events for every meaningful game moment: `OnGameStart`, `OnGameOver`, `OnMove`, `OnRotate`, `OnSoftDrop`, `OnHardDrop`, `OnLanded`, `OnLock`, `OnLineClear(int lines)`, `OnPaused`, and `OnResumed`. Exposes `IsPaused` and `IsGameOver` read-only properties. `Pause()` and `Resume()` guard against double-calls and game-over state; `Resume()` resets `stepTimer` to prevent gravity catch-up.
+  - `GameStats.cs` — Plain data class (no `MonoBehaviour`) holding all per-game statistics: `Score`, `Level`, `TotalLines`, `LinesInCurrentLevel`, `Singles`, `Doubles`, `Triples`, `Tetrises`, `MaxCombo`, `TotalPlayTime`, and `TimePerLevel` (seconds per level, indexed by level−1). Owned and mutated by `ScoreManager`; read by `GameOverUI`.
+  - `GameManager.cs` — Top-level game orchestrator. Owns gravity timing, lock delay, command execution, rotation with SRS wall kicks, and game flow. Does NOT own input. Has an editor-only `ToggleGravity()` debug method. Uses a `LockAndSpawn()` coroutine for the lock → flash → clear → spawn sequence, pausing gravity and input during the animation. Hard drop instantly moves piece to bottom and locks (no lock delay). Calls `board.UpdateGhostPiece()` after every successful move, rotation, or gravity step. Fires C# events for every meaningful game moment: `OnGameStart`, `OnGameOver`, `OnMove`, `OnRotate`, `OnSoftDrop`, `OnHardDrop`, `OnLanded`, `OnLock`, `OnLineClear(int lines)`, `OnLineClearBlink(int lines)`, `OnPaused`, and `OnResumed`. Exposes `IsPaused` and `IsGameOver` read-only properties. `Pause()` and `Resume()` guard against double-calls and game-over state; `Resume()` resets `stepTimer` to prevent gravity catch-up. `Restart()` stops all coroutines, resets all state flags, calls `board.ResetBoard()` + `board.SpawnPiece()`, and fires `OnGameStart` — used by `GameOverUI`. Gravity step delay is driven by `ScoreManager.OnLevelChanged` using the Tetris Guideline formula (`(0.8 − (level−1)×0.007)^(level−1)`, clamped to 33 ms minimum).
+  - `ScoreManager.cs` — Tracks score, level, and per-game statistics. Subscribes to `GameManager` events (`OnEnable`/`OnDisable`) and fires its own events so the HUD and game-over overlay can update without polling. Fires `OnScoreChanged(int)`, `OnLevelChanged(int)`, and `OnLinesChanged(int totalLines, int linesInCurrentLevel)`. Exposes `Score`, `Level`, `TotalLines`, `LinesInCurrentLevel` properties and a `CurrentStats` snapshot. See **Scoring System** section for the full formula.
   - `InputHandler.cs` — Reads Unity Input System actions and translates them into `GameCommand`s. Implements hold-to-repeat (holdDelay + holdRepeatRate) for Tetris-standard key repeat. Rotation and hard drop are one-shot (no repeat). Debug action map (`#if UNITY_EDITOR`) handles dev-only keybinds. Escape is read directly via `Keyboard.current` (not via input actions) so it cannot be rebound — it opens `PauseMenuUI` when the game is running and the menu is not already open. All gameplay commands are suppressed while `gameManager.IsPaused` is true.
   - `SoundManager.cs` — Manages all audio. Subscribes to `GameManager` events and plays the matching SFX clip. Owns two `AudioSource` components created at runtime: one looping music source and one one-shot SFX source. Exposes `SetMusicVolume()`, `SetSfxVolume()`, and `SetMusicTrack()` (with fade). Track switching fades out/in over 0.5 s via a coroutine. `HandlePaused()` calls `musicSource.Pause()` (preserves playback position); `HandleResumed()` calls `musicSource.UnPause()` with an `isPlaying` guard for the edge case where a track crossfade ran while paused. Exposes `PlayMenuSfx(AudioClip)` for UI navigation sounds.
   - `SoundSettings.cs` — `ScriptableObject` data container (`[CreateAssetMenu(menuName = "Tetris/Sound Settings")]`). Holds `musicTracks[]`, `musicTrackNames[]`, `defaultMusicTrackIndex`, `defaultMusicVolume`, `defaultSfxVolume`, and individual SFX clips for every game event (move, rotate, softDrop, hardDrop, landed, lock, lineClear, tetris, gameStart, gameOver). Also holds 4 pause menu SFX clips: `sfxPauseOpen`, `sfxPauseClose`, `sfxMenuNavigate`, `sfxMenuSelect`. Asset lives in `Assets/Project/ScriptableObjects/SoundSettings.asset`.
   - `SoundUI.cs` — Glue between UI controls and `SoundManager`. On `Start()` syncs slider values to current `SoundManager` state and populates the track dropdown from `SoundManager.TrackNames`. Registers/unregisters UI callbacks in `OnEnable`/`OnDisable`.
-  - `GameOverUI.cs` — Full-screen game-over overlay. Subscribes to `GameManager.OnGameOver` in `Awake`/`OnDestroy` (not `OnEnable`/`OnDisable`) so the listener survives while the panel is hidden. Fades in over `fadeDuration` seconds via a `CanvasGroup`. Supports Up/Down arrow keyboard navigation between Restart and Quit buttons; Enter/Space activates the selection. Button colors (`normalColor`, `selectedColor`) are Inspector-configurable `[SerializeField]` fields; `Button.transition` is set to `None` in `Start()` so Unity's built-in color system does not fight the script-driven coloring.
+  - `HudUI.cs` — Always-visible HUD overlay. Subscribes to `ScoreManager.OnScoreChanged`, `OnLevelChanged`, and `OnLinesChanged` (`OnEnable`/`OnDisable`). Updates four `TextMeshProUGUI` labels: score, level, total lines cleared, and lines remaining until the next level (`10 − linesInCurrentLevel`). `Refresh()` reads current state from `ScoreManager` directly, called in `Start()` to initialize before any events fire.
+  - `GameOverUI.cs` — Full-screen game-over overlay. Subscribes to `GameManager.OnGameOver` in `Awake`/`OnDestroy` (not `OnEnable`/`OnDisable`) so the listener survives while the panel is hidden. On game over, reads `scoreManager.Score` and displays it in a `scoreText` label before fading in. Fades in over `fadeDuration` seconds via a `CanvasGroup`. Supports Up/Down arrow keyboard navigation between Restart and Quit buttons; Enter/Space activates the selection. Restart calls `gameManager.Restart()` and hides the panel. Button colors (`normalColor`, `selectedColor`) are Inspector-configurable `[SerializeField]` fields; `Button.transition` is set to `None` in `Start()` so Unity's built-in color system does not fight the script-driven coloring.
   - `PauseMenuUI.cs` — Full-screen pause overlay. Opened by `InputHandler` on Escape (only when `!IsGameOver`). Fades in via `CanvasGroup`. Supports Up/Down/Enter/Space keyboard navigation across Resume, Options, and Quit buttons. Escape while open calls `Close()` which force-closes any sub-panels and calls `gameManager.Resume()`. Button colors (`selectedColor`, `unselectedColor`) are Inspector-configurable; `Button.transition = None` is set in `Awake()`. Initialization (button array + listeners + transition mode) is done in `Awake()` — not `Start()` — because the panel starts inactive and `Start()` would be deferred until after the first `Open()` call activates it.
   - `OptionsMenuUI.cs` — Options sub-panel shown from the pause menu. Provides a Sound button (shows AudioPanel) and a disabled Keybindings placeholder. AudioPanel is a child of OptionsMenuPanel; when showing AudioPanel the parent panel stays active (only AudioPanel is toggled) so AudioPanel's `activeInHierarchy` is true and `SoundPanelEscape` can run. Same `Awake()` initialization pattern as `PauseMenuUI`. Button colors are Inspector-configurable.
   - `SoundPanelEscape.cs` — Tiny shim on the AudioPanel. Routes Escape back to `OptionsMenuUI.OnAudioPanelBack()`. Only active when AudioPanel is active (Unity's `SetActive` semantics).
@@ -38,7 +41,7 @@ This is a Unity project — it is opened and built through the Unity Editor, not
   - `TetrisInput.inputactions` — Unity Input System action definitions. Gameplay map: MoveLeft, MoveRight, SoftDrop, HardDrop, RotateClockwise, RotateCounterClockwise. Debug map: ToggleGravity (editor-only). Supports rebinding.
   - `TetrisInput.cs` — Auto-generated C# wrapper (do not edit manually).
 - **`Assets/Project/ScriptableObjects/`** — ScriptableObject assets (spawn strategies, SoundSettings, etc.).
-- **`Assets/Project/Tests/EditMode/`** — EditMode unit tests (NUnit). Tests for `TetrominoData`, `BagRandomStrategy`, `Board`, `Piece`, and `GameManager`.
+- **`Assets/Project/Tests/EditMode/`** — EditMode unit tests (NUnit). Tests for `TetrominoData`, `BagRandomStrategy`, `Board`, `Piece`, `GameManager`, and `ScoreManager`.
 - **`Assets/Project/Scenes/Gameplay.unity`** — Main game scene with Board GameObject (at 4.5, 9.5) and 2D camera.
 - **`Assets/Project/Sprites/`** — Game sprites (Grid.png used as tiled board background, PreviewPanel.png used as 9-sliced next-piece preview background).
 - **`Assets/Project/Sound/`** — Audio assets. `Music/` holds looping background tracks (MP3). `SFX/` holds one-shot effect clips (WAV).
@@ -66,12 +69,19 @@ Board (world pos 4.5, 9.5)         — SpriteRenderer (tiled Grid.png, 10x20, so
         ├── Block 1
         ├── Block 2
         └── Block 3
+ScoreManager (world pos 0, 0)      — ScoreManager.cs
 SoundManager (world pos 0, 0)      — SoundManager.cs; two AudioSources added at runtime
 EventSystem                        — EventSystem + InputSystemUIInputModule (required for UI clicks)
 UICanvas (Screen Space Overlay)    — Canvas + CanvasScaler + GraphicRaycaster
+  ├── HudPanel                     — HudUI.cs
+  │     ├── ScoreText               — TextMeshProUGUI (score display)
+  │     ├── LevelText               — TextMeshProUGUI (current level)
+  │     ├── TotalLinesText          — TextMeshProUGUI (total lines cleared)
+  │     └── NextLevelText           — TextMeshProUGUI (lines until next level)
   ├── GameOverPanel                — RectTransform (full-screen), CanvasGroup, GameOverUI.cs
   │     ├── Dim                     — Image black α=0.8, full-screen
   │     ├── GameOverText            — TextMeshProUGUI "GAME OVER"
+  │     ├── ScoreText               — TextMeshProUGUI (final score, set on game over)
   │     ├── RestartButton           — Button + Image (gray/gold when selected), transition=None
   │     │     └── Label             — TextMeshProUGUI "Restart"
   │     └── QuitButton              — Button + Image (gray/gold when selected), transition=None
@@ -110,6 +120,11 @@ UICanvas (Screen Space Overlay)    — Canvas + CanvasScaler + GraphicRaycaster
 InputHandler ──GameCommand──→ GameManager ──→ Board.ActivePiece.Move()/Rotate()
 GameManager.Update() ───gravity tick───→ Board.ActivePiece.Move(down)
 GameManager.RotatePiece() ──SRS wall kicks──→ Board.ActivePiece.Rotate()
+
+GameManager ──OnLineClear/OnLock/OnGameStart/…──→ ScoreManager
+ScoreManager ──OnScoreChanged/OnLevelChanged/OnLinesChanged──→ HudUI
+ScoreManager ──OnLevelChanged──→ GameManager (gravity speed update)
+GameManager ──OnGameOver──→ GameOverUI ──scoreManager.Score──→ ScoreText label
 ```
 
 The Board's local origin is the center of the grid. Grid bounds are x: -5 to 5, y: -10 to 10. Grid cell edges sit at integer positions; cell centers are at half-integer positions (blocks offset by +0.5 on both axes).
@@ -143,6 +158,7 @@ The Board's local origin is the center of the grid. Grid bounds are x: -5 to 5, 
 - ScriptableObjects are created via `ScriptableObject.CreateInstance<T>()`.
 - `Board.ClearAndCollapseRows()` calls `Destroy()` which logs errors in EditMode; tests use `LogAssert.Expect()` to suppress these.
 - Clean up test GameObjects with `Object.DestroyImmediate()` in `[TearDown]`.
+- `ScoreManager` tests invoke private handler methods directly via reflection (no `GameManager` wired up) since `OnEnable` does not run in EditMode, keeping tests isolated.
 
 ### C# Coding Style
 - **Namespace:** All scripts use `namespace Project.Scripts`.
@@ -179,9 +195,19 @@ The Board's local origin is the center of the grid. Grid bounds are x: -5 to 5, 
 ### Line Clear Animation
 - Line clearing is a two-phase process: detect full rows, then flash, then clear.
 - `Board.FindFullRows()` detects without mutating. `Board.FlashRows(rows, onHide)` is a coroutine that blinks rows (toggling `SpriteRenderer.color` between clear and original); the optional `onHide` callback fires each time blocks are hidden. `Board.ClearAndCollapseRows()` destroys and collapses.
-- `GameManager` passes `() => OnLineClear?.Invoke(lineCount)` as `onHide`, so the line-clear sound fires in sync with each blink rather than once before the animation.
+- `GameManager` passes `() => OnLineClearBlink?.Invoke(lineCount)` as `onHide`, so the blink callback fires in sync with each flash frame. `OnLineClear` fires once after the full animation completes. `SoundManager` subscribes to `OnLineClearBlink` for the line-clear SFX; `ScoreManager` subscribes to `OnLineClear` for scoring (one score update per clear, not per blink).
 - During the flash, a `clearing` flag pauses both gravity and input in `GameManager`.
 - Flash timing (`flashDuration`, `flashCount`) is Inspector-tunable on the Board component.
+
+### Scoring System
+- `ScoreManager` subscribes to `GameManager` events and fires `OnScoreChanged`, `OnLevelChanged`, and `OnLinesChanged` for downstream consumers (`HudUI`, `GameOverUI`).
+- **Score formula:** `basePoints × level + 50 × combo` per line-clear event.
+- **Base points by clear type:** Single = 100, Double = 300, Triple = 500, Tetris = 800.
+- **Back-to-back Tetris:** When two consecutive line-clear events are both Tetrises, the second adds +400 to its base points. Any non-Tetris clear between them breaks the streak.
+- **Combo:** Increments by 1 on every consecutive line-clear event. Resets to 0 on every `OnLock` (piece locks without clearing). Because `OnLock` fires before `OnLineClear` in `LockAndSpawn`, `HandleLock` resets combo unconditionally and `HandleLineClear` re-increments it — so a lock+clear in the same sequence correctly ends at combo ≥ 1.
+- **Level progression:** Every 10 lines (`LinesInCurrentLevel`) advances the level by 1. `LinesInCurrentLevel` rolls over (e.g. clearing 3 lines at 8/10 sets it to 1, not 11). Level is 1-based and has no cap.
+- **Gravity speed** scales with level via the Tetris Guideline formula, applied in `GameManager.HandleLevelChanged`: `stepDelay = max((0.8 − (level−1)×0.007)^(level−1), 0.033)` seconds.
+- **`GameStats`** is a plain C# class (not `MonoBehaviour`) that `ScoreManager` allocates fresh on each `HandleGameStart`. It holds all per-game counters and a `TimePerLevel` list. `GameOverUI` reads `scoreManager.Score` directly on game over; future stat screens should use `scoreManager.CurrentStats` for the full snapshot.
 
 ### Next Piece Preview
 - A 5x5 dark panel with a gray border (`PreviewPanel.png`, 8x8 px 9-sliced sprite, `pixelsPerUnit: 8`) appears to the right of the board.
@@ -225,7 +251,7 @@ The Board's local origin is the center of the grid. Grid bounds are x: -5 to 5, 
 ### Sound System
 - `SoundManager` subscribes to `GameManager` C# events (`OnEnable`/`OnDisable`) and plays SFX via `AudioSource.PlayOneShot()` so clips can overlap freely.
 - All clips and default volumes live in a `SoundSettings` ScriptableObject asset. Assign it to `SoundManager.settings` in the Inspector.
-- `HandleLineClear(int lines)` plays `sfxTetris` for 4-line clears and `sfxLineClear` otherwise.
+- `HandleLineClear(int lines)` plays `sfxTetris` for 4-line clears and `sfxLineClear` otherwise. SoundManager subscribes to `OnLineClearBlink` (not `OnLineClear`) so the SFX fires in sync with each blink frame rather than after the full animation.
 - Music playback uses a second looping `AudioSource`. `SetMusicTrack(index)` cross-fades between tracks with a 0.5 s coroutine.
 - `SoundUI` wires Unity UI sliders and a `TMP_Dropdown` to `SoundManager`; it populates the dropdown from `SoundManager.TrackNames` at runtime. Volume sliders initialize from `SoundManager.MusicVolume` / `SfxVolume` so they reflect the ScriptableObject defaults on first load.
 - Audio clips live in `Assets/Project/Sound/Music/` (MP3, looping) and `Assets/Project/Sound/SFX/` (WAV, one-shot).

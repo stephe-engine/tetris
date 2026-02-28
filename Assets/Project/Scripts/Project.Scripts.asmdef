@@ -1,6 +1,6 @@
 {
     "name": "Project.Scripts",
-    "rootNamespace": "Project.Scripts",
+    "rootNamespace": "",
     "references": [
         "Unity.InputSystem",
         "Project.Input",

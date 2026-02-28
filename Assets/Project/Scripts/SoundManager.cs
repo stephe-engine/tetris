@@ -72,7 +72,7 @@ namespace Project.Scripts
             gameManager.OnHardDrop += HandleHardDrop;
             gameManager.OnLanded += HandleLanded;
             gameManager.OnLock += HandleLock;
-            gameManager.OnLineClear += HandleLineClear;
+            gameManager.OnLineClearBlink += HandleLineClear;
             gameManager.OnPaused += HandlePaused;
             gameManager.OnResumed += HandleResumed;
         }
@@ -90,7 +90,7 @@ namespace Project.Scripts
             gameManager.OnHardDrop -= HandleHardDrop;
             gameManager.OnLanded -= HandleLanded;
             gameManager.OnLock -= HandleLock;
-            gameManager.OnLineClear -= HandleLineClear;
+            gameManager.OnLineClearBlink -= HandleLineClear;
             gameManager.OnPaused -= HandlePaused;
             gameManager.OnResumed -= HandleResumed;
         }
