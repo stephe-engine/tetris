@@ -35,7 +35,7 @@ MonoBehaviour:
   sfxTetris: {fileID: 8300000, guid: a299d26ef598484408b0c0859b245cdd, type: 3}
   sfxGameStart: {fileID: 0}
   sfxGameOver: {fileID: 8300000, guid: e8f9e4cded1bc1a4094bc86a96b30d90, type: 3}
-  sfxPauseOpen: {fileID: 0}
-  sfxPauseClose: {fileID: 0}
-  sfxMenuNavigate: {fileID: 0}
-  sfxMenuSelect: {fileID: 0}
+  sfxPauseOpen: {fileID: 8300000, guid: 10dcc874c1c57b74c876c4396e19e224, type: 3}
+  sfxPauseClose: {fileID: 8300000, guid: 10dcc874c1c57b74c876c4396e19e224, type: 3}
+  sfxMenuNavigate: {fileID: 8300000, guid: 9a8b83b40fe803849ba07871b470a1db, type: 3}
+  sfxMenuSelect: {fileID: 8300000, guid: 9a8b83b40fe803849ba07871b470a1db, type: 3}
