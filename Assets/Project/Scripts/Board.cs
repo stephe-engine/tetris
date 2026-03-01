@@ -25,12 +25,6 @@ namespace Project.Scripts
         /// <summary>Strategy used to select the next tetromino type when spawning a piece.</summary>
         [SerializeField] private SpawnStrategy spawnStrategy;
 
-        /// <summary>Sprite used as the tiled background for the next-piece preview panel.</summary>
-        [SerializeField] private Sprite previewPanelSprite;
-
-        /// <summary>Local-space offset from Board origin to the preview panel center.</summary>
-        [SerializeField] private Vector2 previewOffset = new(8f, 7.5f);
-
         [SerializeField] private Sprite spriteI;
         [SerializeField] private Sprite spriteO;
         [SerializeField] private Sprite spriteT;
@@ -45,9 +39,12 @@ namespace Project.Scripts
         private GameObject[,] lockedBlocks;
         private Piece activePiece;
         private GameObject ghostPiece;
-        private Tetromino? nextType;
-        private GameObject previewPiece;
-        private GameObject previewPanel;
+
+        /// <summary>The next tetromino type that will spawn after the active piece locks.</summary>
+        public Tetromino? NextType { get; private set; }
+
+        /// <summary>Fired immediately after <see cref="NextType"/> is updated in <see cref="SpawnPiece"/>.</summary>
+        public event System.Action<Tetromino> OnNextTypeChanged;
 
         /// <summary>The currently active (falling) piece, or null if none.</summary>
         public Piece ActivePiece => activePiece;
@@ -70,7 +67,7 @@ namespace Project.Scripts
             cells = new int[width, height];
             lockedBlocks = new GameObject[width, height];
             spawnStrategy.Reset();
-            nextType = null;
+            NextType = null;
         }
 
         /// <summary>
@@ -78,8 +75,9 @@ namespace Project.Scripts
         /// </summary>
         public void SpawnPiece()
         {
-            Tetromino type = nextType.HasValue ? nextType.Value : spawnStrategy.Next();
-            nextType = spawnStrategy.Next();
+            Tetromino type = NextType.HasValue ? NextType.Value : spawnStrategy.Next();
+            NextType = spawnStrategy.Next();
+            OnNextTypeChanged?.Invoke(NextType.Value);
 
             Sprite sprite = GetSpriteForTetromino(type);
 
@@ -90,7 +88,6 @@ namespace Project.Scripts
             activePiece.Initialize(type, Data.SpawnPosition, sprite);
 
             UpdateGhostPiece();
-            UpdatePreview();
         }
 
         /// <summary>
@@ -98,7 +95,7 @@ namespace Project.Scripts
         /// </summary>
         /// <param name="type">The tetromino type to look up.</param>
         /// <returns>The corresponding sprite, or the I-piece sprite as a fallback.</returns>
-        private Sprite GetSpriteForTetromino(Tetromino type)
+        public Sprite GetSpriteForTetromino(Tetromino type)
         {
             return type switch
             {
@@ -141,7 +138,6 @@ namespace Project.Scripts
         public void LockPiece()
         {
             ClearGhostPiece();
-            ClearPreview();
 
             if (!activePiece)
                 return;
@@ -404,13 +400,6 @@ namespace Project.Scripts
             }
 
             ClearGhostPiece();
-            ClearPreview();
-
-            if (previewPanel)
-            {
-                Destroy(previewPanel);
-                previewPanel = null;
-            }
 
             if (activePiece)
             {
@@ -418,84 +407,8 @@ namespace Project.Scripts
                 activePiece = null;
             }
 
-            nextType = null;
+            NextType = null;
             spawnStrategy.Reset();
-        }
-
-        /// <summary>
-        /// Updates the next-piece preview display. Creates the background panel
-        /// on first call, and recreates the preview blocks each time.
-        /// </summary>
-        private void UpdatePreview()
-        {
-            if (!nextType.HasValue)
-                return;
-
-            // Create background panel once (lazy)
-            if (!previewPanel)
-            {
-                previewPanel = new GameObject("PreviewPanel");
-                previewPanel.transform.SetParent(transform, false);
-
-                SpriteRenderer panelRenderer = previewPanel.AddComponent<SpriteRenderer>();
-                panelRenderer.sprite = previewPanelSprite;
-                panelRenderer.drawMode = SpriteDrawMode.Sliced;
-                panelRenderer.size = new Vector2(5f, 5f);
-                panelRenderer.sortingOrder = 0;
-
-                previewPanel.transform.localPosition = (Vector3)previewOffset;
-            }
-
-            // Recreate preview piece blocks
-            if (previewPiece)
-            {
-                Destroy(previewPiece);
-            }
-
-            previewPiece = new GameObject("Preview");
-            previewPiece.transform.SetParent(transform, false);
-
-            Tetromino type = nextType.Value;
-            Vector2Int[] cellOffsets = Data.Cells[type];
-            Sprite sprite = GetSpriteForTetromino(type);
-
-            // Compute bounding box center of cells (with cell center offset) for centering
-            Vector2 min = new Vector2(float.MaxValue, float.MaxValue);
-            Vector2 max = new Vector2(float.MinValue, float.MinValue);
-
-            for (int i = 0; i < cellOffsets.Length; i++)
-            {
-                Vector2 cell = new Vector2(cellOffsets[i].x, cellOffsets[i].y) + CellCenterOffset;
-                min = Vector2.Min(min, cell - CellCenterOffset);
-                max = Vector2.Max(max, cell + CellCenterOffset);
-            }
-
-            Vector2 pieceCenter = (min + max) / 2f;
-
-            for (int i = 0; i < cellOffsets.Length; i++)
-            {
-                GameObject block = new($"PreviewBlock {i}");
-                block.transform.SetParent(previewPiece.transform, false);
-
-                SpriteRenderer sr = block.AddComponent<SpriteRenderer>();
-                sr.sprite = sprite;
-                sr.sortingOrder = 1;
-
-                Vector2 cellPosition = new Vector2(cellOffsets[i].x, cellOffsets[i].y) + CellCenterOffset;
-                block.transform.localPosition = (Vector3)(previewOffset + cellPosition - pieceCenter);
-            }
-        }
-
-        /// <summary>
-        /// Destroys the preview piece blocks. The background panel persists.
-        /// </summary>
-        private void ClearPreview()
-        {
-            if (previewPiece)
-            {
-                Destroy(previewPiece);
-                previewPiece = null;
-            }
         }
 
         /// <summary>

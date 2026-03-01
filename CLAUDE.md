@@ -18,7 +18,7 @@ This is a Unity project — it is opened and built through the Unity Editor, not
 ## Architecture
 
 - **`Assets/Project/Scripts/`** — All game scripts in the `Project.Scripts` namespace.
-  - `Board.cs` — Main game board controller. Manages the 10x20 grid, spawns pieces, validates positions. Piece selection is delegated to a `SpawnStrategy` ScriptableObject (Inspector-assignable). Line clearing is split into `FindFullRows()` (detection), `FlashRows()` (coroutine blink animation), and `ClearAndCollapseRows()` (destroy + collapse). Flash timing is Inspector-tunable (`flashDuration`, `flashCount`). Also owns the ghost piece preview — `UpdateGhostPiece()` calculates the hard-drop destination and renders translucent blocks there; `ClearGhostPiece()` removes it during locking. Ghost alpha is Inspector-tunable (`ghostAlpha`). Also owns the next-piece preview — `UpdatePreview()` shows the upcoming piece in a 5x5 panel to the right of the board; `ClearPreview()` removes the blocks during locking. Preview offset is Inspector-tunable (`previewOffset`). The next piece is pre-fetched from the spawn strategy and stored in `nextType`.
+  - `Board.cs` — Main game board controller. Manages the 10x20 grid, spawns pieces, validates positions. Piece selection is delegated to a `SpawnStrategy` ScriptableObject (Inspector-assignable). Line clearing is split into `FindFullRows()` (detection), `FlashRows()` (coroutine blink animation), and `ClearAndCollapseRows()` (destroy + collapse). Flash timing is Inspector-tunable (`flashDuration`, `flashCount`). Also owns the ghost piece preview — `UpdateGhostPiece()` calculates the hard-drop destination and renders translucent blocks there; `ClearGhostPiece()` removes it during locking. Ghost alpha is Inspector-tunable (`ghostAlpha`). Exposes `NextType` (nullable `Tetromino` property) for the upcoming piece and fires `OnNextTypeChanged` immediately after each spawn so `NextPieceUI` can update without polling. `GetSpriteForTetromino` is `public` so `NextPieceUI` can retrieve the correct block sprite.
   - `SpawnStrategy.cs` — Abstract `ScriptableObject` base class for tetromino spawn strategies. Defines `Next()` (returns the next `Tetromino`) and `Reset()` (clears internal state for new games).
   - `BagRandomStrategy.cs` — Standard 7-bag spawn strategy. All 7 piece types are shuffled into a bag and dealt one at a time; the bag refills when empty. Prevents piece droughts. Default strategy on the Board.
   - `SimpleRandomStrategy.cs` — Uniform random spawn strategy. Picks any piece with equal probability each time (original behavior). No drought protection.
@@ -33,17 +33,18 @@ This is a Unity project — it is opened and built through the Unity Editor, not
   - `SoundSettings.cs` — `ScriptableObject` data container (`[CreateAssetMenu(menuName = "Tetris/Sound Settings")]`). Holds `musicTracks[]`, `musicTrackNames[]`, `defaultMusicTrackIndex`, `defaultMusicVolume`, `defaultSfxVolume`, and individual SFX clips for every game event (move, rotate, softDrop, hardDrop, landed, lock, lineClear, tetris, gameStart, gameOver). Also holds 4 pause menu SFX clips: `sfxPauseOpen`, `sfxPauseClose`, `sfxMenuNavigate`, `sfxMenuSelect`. Asset lives in `Assets/Project/ScriptableObjects/SoundSettings.asset`.
   - `SoundUI.cs` — Glue between UI controls and `SoundManager`. On `Start()` syncs slider values to current `SoundManager` state and populates the track dropdown from `SoundManager.TrackNames`. Registers/unregisters UI callbacks in `OnEnable`/`OnDisable`.
   - `HudUI.cs` — Always-visible HUD overlay. Subscribes to `ScoreManager.OnScoreChanged`, `OnLevelChanged`, and `OnLinesChanged` (`OnEnable`/`OnDisable`). Updates four `TextMeshProUGUI` labels: score, level, total lines cleared, and lines remaining until the next level (`10 − linesInCurrentLevel`). `Refresh()` reads current state from `ScoreManager` directly, called in `Start()` to initialize before any events fire.
-  - `GameOverUI.cs` — Full-screen game-over overlay. Subscribes to `GameManager.OnGameOver` in `Awake`/`OnDestroy` (not `OnEnable`/`OnDisable`) so the listener survives while the panel is hidden. On game over, reads `scoreManager.Score` and displays it in a `scoreText` label before fading in. Fades in over `fadeDuration` seconds via a `CanvasGroup`. Supports Up/Down arrow keyboard navigation between Restart and Quit buttons; Enter/Space activates the selection. Restart calls `gameManager.Restart()` and hides the panel. Button colors (`normalColor`, `selectedColor`) are Inspector-configurable `[SerializeField]` fields; `Button.transition` is set to `None` in `Start()` so Unity's built-in color system does not fight the script-driven coloring.
+  - `GameOverUI.cs` — Full-screen game-over overlay. Subscribes to `GameManager.OnGameOver` in `Awake`/`OnDestroy` (not `OnEnable`/`OnDisable`) so the listener survives while the panel is hidden. **`GameOverPanel` must start active in the scene** so `Awake()` runs at scene load and registers the subscription; `Start()` then calls `panel.SetActive(false)` to hide it. If the panel starts inactive, `Awake()` is deferred and the game-over event is never caught. On game over, reads `scoreManager.Score` and displays it in a `scoreText` label before fading in. Fades in over `fadeDuration` seconds via a `CanvasGroup`. Supports Up/Down arrow keyboard navigation between Restart and Quit buttons; Enter/Space activates the selection. Restart calls `gameManager.Restart()` and hides the panel. Button colors (`normalColor`, `selectedColor`) are Inspector-configurable `[SerializeField]` fields; `Button.transition` is set to `None` in `Start()` so Unity's built-in color system does not fight the script-driven coloring.
   - `PauseMenuUI.cs` — Full-screen pause overlay. Opened by `InputHandler` on Escape (only when `!IsGameOver`). Fades in via `CanvasGroup`. Supports Up/Down/Enter/Space keyboard navigation across Resume, Options, and Quit buttons. Escape while open calls `Close()` which force-closes any sub-panels and calls `gameManager.Resume()`. Button colors (`selectedColor`, `unselectedColor`) are Inspector-configurable; `Button.transition = None` is set in `Awake()`. Initialization (button array + listeners + transition mode) is done in `Awake()` — not `Start()` — because the panel starts inactive and `Start()` would be deferred until after the first `Open()` call activates it.
   - `OptionsMenuUI.cs` — Options sub-panel shown from the pause menu. Provides a Sound button (shows AudioPanel) and a disabled Keybindings placeholder. AudioPanel is a child of OptionsMenuPanel; when showing AudioPanel the parent panel stays active (only AudioPanel is toggled) so AudioPanel's `activeInHierarchy` is true and `SoundPanelEscape` can run. Same `Awake()` initialization pattern as `PauseMenuUI`. Button colors are Inspector-configurable.
   - `SoundPanelEscape.cs` — Tiny shim on the AudioPanel. Routes Escape back to `OptionsMenuUI.OnAudioPanelBack()`. Only active when AudioPanel is active (Unity's `SetActive` semantics).
+  - `NextPieceUI.cs` — Displays the next tetromino in a persistent world-space panel to the right of the board. Subscribes to `Board.OnNextTypeChanged` in `OnEnable`/`OnDisable`. `Refresh()` reads `Board.NextType` directly, called in `Start()` to initialise before any events fire. `UpdateDisplay()` repositions four pre-placed `SpriteRenderer` children by computing the bounding-box center of cell offsets and setting each block's `localPosition` to `(cellX − centerX, cellY − centerY)` — 1 world unit per cell, matching the board grid exactly.
 - **`Assets/Project/Input/`** — Input configuration.
   - `TetrisInput.inputactions` — Unity Input System action definitions. Gameplay map: MoveLeft, MoveRight, SoftDrop, HardDrop, RotateClockwise, RotateCounterClockwise. Debug map: ToggleGravity (editor-only). Supports rebinding.
   - `TetrisInput.cs` — Auto-generated C# wrapper (do not edit manually).
 - **`Assets/Project/ScriptableObjects/`** — ScriptableObject assets (spawn strategies, SoundSettings, etc.).
 - **`Assets/Project/Tests/EditMode/`** — EditMode unit tests (NUnit). Tests for `TetrominoData`, `BagRandomStrategy`, `Board`, `Piece`, `GameManager`, and `ScoreManager`.
 - **`Assets/Project/Scenes/Gameplay.unity`** — Main game scene with Board GameObject (at 4.5, 9.5) and 2D camera.
-- **`Assets/Project/Sprites/`** — Game sprites (Grid.png used as tiled board background, PreviewPanel.png used as 9-sliced next-piece preview background).
+- **`Assets/Project/Sprites/`** — Game sprites (Grid.png used as tiled board background, PreviewPanel.png used as 9-sliced panel border, SolidFill.png is a 4×4 solid-fill sprite used for the NextPiecePanel background).
 - **`Assets/Project/Sound/`** — Audio assets. `Music/` holds looping background tracks (MP3). `SFX/` holds one-shot effect clips (WAV).
 - **`Assets/Project/Prefabs/`** — Reusable prefabs (empty, to be populated).
 - **`Assets/Plugins/Chess Studio/Puzzle Blocks Icon Pack/`** — Asset Store block sprites. Using the "Stone" variants (e.g. `lightBlueStone.png`, `redStone.png`) for tetromino blocks.
@@ -53,12 +54,12 @@ This is a Unity project — it is opened and built through the Unity Editor, not
 ```
 GameManager (world pos 0, 0)       — GameManager.cs + InputHandler.cs
 Board (world pos 4.5, 9.5)         — SpriteRenderer (tiled Grid.png, 10x20, sortingOrder 0)
-  ├── PreviewPanel (runtime child)  — SpriteRenderer (sliced PreviewPanel.png, 5x5, sortingOrder 0)
-  ├── Preview (runtime child)       — Next-piece preview blocks
-  │     ├── PreviewBlock 0           — SpriteRenderer (sortingOrder 1, full opacity)
-  │     ├── PreviewBlock 1
-  │     ├── PreviewBlock 2
-  │     └── PreviewBlock 3
+  ├── NextPiecePanel                — SpriteRenderer (SolidFill.png, tiled 5x5, sortingOrder 0)
+  │     │                             local pos (8, 7.5); NextPieceUI.cs; persistent (scene-placed)
+  │     ├── Block0                   — SpriteRenderer (sortingOrder 1), inactive until first spawn
+  │     ├── Block1
+  │     ├── Block2
+  │     └── Block3
   ├── Ghost (runtime child)         — Managed by Board, translucent drop preview
   │     ├── GhostBlock 0             — SpriteRenderer (sortingOrder 1, alpha = ghostAlpha)
   │     ├── GhostBlock 1
@@ -79,6 +80,8 @@ UICanvas (Screen Space Overlay)    — Canvas + CanvasScaler + GraphicRaycaster
   │     ├── TotalLinesText          — TextMeshProUGUI (total lines cleared)
   │     └── NextLevelText           — TextMeshProUGUI (lines until next level)
   ├── GameOverPanel                — RectTransform (full-screen), CanvasGroup, GameOverUI.cs
+  │     │                             starts ACTIVE so Awake() subscribes at scene load;
+  │     │                             Start() immediately calls panel.SetActive(false)
   │     ├── Dim                     — Image black α=0.8, full-screen
   │     ├── GameOverText            — TextMeshProUGUI "GAME OVER"
   │     ├── ScoreText               — TextMeshProUGUI (final score, set on game over)
@@ -125,6 +128,7 @@ GameManager ──OnLineClear/OnLock/OnGameStart/…──→ ScoreManager
 ScoreManager ──OnScoreChanged/OnLevelChanged/OnLinesChanged──→ HudUI
 ScoreManager ──OnLevelChanged──→ GameManager (gravity speed update)
 GameManager ──OnGameOver──→ GameOverUI ──scoreManager.Score──→ ScoreText label
+Board ──OnNextTypeChanged──→ NextPieceUI (world-space preview update)
 ```
 
 The Board's local origin is the center of the grid. Grid bounds are x: -5 to 5, y: -10 to 10. Grid cell edges sit at integer positions; cell centers are at half-integer positions (blocks offset by +0.5 on both axes).
@@ -210,14 +214,13 @@ The Board's local origin is the center of the grid. Grid bounds are x: -5 to 5, 
 - **`GameStats`** is a plain C# class (not `MonoBehaviour`) that `ScoreManager` allocates fresh on each `HandleGameStart`. It holds all per-game counters and a `TimePerLevel` list. `GameOverUI` reads `scoreManager.Score` directly on game over; future stat screens should use `scoreManager.CurrentStats` for the full snapshot.
 
 ### Next Piece Preview
-- A 5x5 dark panel with a gray border (`PreviewPanel.png`, 8x8 px 9-sliced sprite, `pixelsPerUnit: 8`) appears to the right of the board.
-- The panel uses `SpriteDrawMode.Sliced` so the 1px border stays crisp at any size.
-- Position is Inspector-tunable via `previewOffset` on the Board component (default: `(8, 7.5)` in local space).
-- The next piece type is pre-fetched from `spawnStrategy.Next()` after each spawn and stored in `nextType`. On the next spawn, the stored type is used and a new one is pre-fetched.
-- Preview blocks are centered within the panel by computing the bounding box center of cell offsets.
-- Preview blocks follow the ghost piece pattern: a plain `GameObject` ("Preview") with 4 child `SpriteRenderer`s, recreated on each spawn.
-- The preview panel background ("PreviewPanel") is created once lazily and persists across spawns.
-- `ClearPreview()` destroys only the blocks, not the panel, called alongside `ClearGhostPiece()` during locking.
+- `NextPiecePanel` is a persistent world-space child of `Board` (scene-placed, not runtime-created), visible and editable in the Scene view at all times.
+- Background: `SpriteRenderer` with `SolidFill.png` (tiled 5×5, `sortingOrder 0`) coloured to match the board's cell fill.
+- Position: local `(8, 7.5)` relative to the Board origin — to the right of the board, near the top. Adjust in the Inspector to reposition.
+- The next piece type is pre-fetched from `spawnStrategy.Next()` after each spawn and stored in `Board.NextType`. `Board.OnNextTypeChanged` fires immediately after, passing the new type to `NextPieceUI`.
+- `NextPieceUI` repositions its 4 pre-placed `SpriteRenderer` block children each update. Block `localPosition = (cellX − centerX, cellY − centerY)` where center is the bounding-box center of the piece's cell offsets. Each cell is 1 world unit — identical scale to the board.
+- Blocks start inactive and are activated on first spawn. `Refresh()` initialises from `Board.NextType` in `Start()` before any events fire.
+- The camera is **perspective** (not orthographic), so UI-space pixel sizing cannot reliably match world-space cell size. World-space is the only correct approach for a preview that must visually match the board.
 
 ### Hard Drop & Ghost Piece
 - Hard drop (Space) instantly moves the piece to the lowest valid position and locks immediately (no lock delay).
