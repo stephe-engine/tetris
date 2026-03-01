@@ -44,7 +44,7 @@ This is a Unity project — it is opened and built through the Unity Editor, not
 - **`Assets/Project/ScriptableObjects/`** — ScriptableObject assets (spawn strategies, SoundSettings, etc.).
 - **`Assets/Project/Tests/EditMode/`** — EditMode unit tests (NUnit). Tests for `TetrominoData`, `BagRandomStrategy`, `Board`, `Piece`, `GameManager`, and `ScoreManager`.
 - **`Assets/Project/Scenes/Gameplay.unity`** — Main game scene with Board GameObject (at 4.5, 9.5) and 2D camera.
-- **`Assets/Project/Sprites/`** — Game sprites (Grid.png used as tiled board background, PreviewPanel.png used as 9-sliced panel border, SolidFill.png is a 4×4 solid-fill sprite used for the NextPiecePanel background).
+- **`Assets/Project/Sprites/`** — Game sprites (Grid.png used as tiled board background, PreviewPanel.png used as 9-sliced next-piece preview background).
 - **`Assets/Project/Sound/`** — Audio assets. `Music/` holds looping background tracks (MP3). `SFX/` holds one-shot effect clips (WAV).
 - **`Assets/Project/Prefabs/`** — Reusable prefabs (empty, to be populated).
 - **`Assets/Plugins/Chess Studio/Puzzle Blocks Icon Pack/`** — Asset Store block sprites. Using the "Stone" variants (e.g. `lightBlueStone.png`, `redStone.png`) for tetromino blocks.
@@ -54,7 +54,7 @@ This is a Unity project — it is opened and built through the Unity Editor, not
 ```
 GameManager (world pos 0, 0)       — GameManager.cs + InputHandler.cs
 Board (world pos 4.5, 9.5)         — SpriteRenderer (tiled Grid.png, 10x20, sortingOrder 0)
-  ├── NextPiecePanel                — SpriteRenderer (SolidFill.png, tiled 5x5, sortingOrder 0)
+  ├── NextPiecePanel                — SpriteRenderer (PreviewPanel.png, sortingOrder 0)
   │     │                             local pos (8, 7.5); NextPieceUI.cs; persistent (scene-placed)
   │     ├── Block0                   — SpriteRenderer (sortingOrder 1), inactive until first spawn
   │     ├── Block1
@@ -215,7 +215,7 @@ The Board's local origin is the center of the grid. Grid bounds are x: -5 to 5, 
 
 ### Next Piece Preview
 - `NextPiecePanel` is a persistent world-space child of `Board` (scene-placed, not runtime-created), visible and editable in the Scene view at all times.
-- Background: `SpriteRenderer` with `SolidFill.png` (tiled 5×5, `sortingOrder 0`) coloured to match the board's cell fill.
+- Background: `SpriteRenderer` with `PreviewPanel.png` (`sortingOrder 0`).
 - Position: local `(8, 7.5)` relative to the Board origin — to the right of the board, near the top. Adjust in the Inspector to reposition.
 - The next piece type is pre-fetched from `spawnStrategy.Next()` after each spawn and stored in `Board.NextType`. `Board.OnNextTypeChanged` fires immediately after, passing the new type to `NextPieceUI`.
 - `NextPieceUI` repositions its 4 pre-placed `SpriteRenderer` block children each update. Block `localPosition = (cellX − centerX, cellY − centerY)` where center is the bounding-box center of the piece's cell offsets. Each cell is 1 world unit — identical scale to the board.

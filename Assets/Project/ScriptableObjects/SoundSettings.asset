@@ -23,8 +23,8 @@ MonoBehaviour:
   - Rock EDM
   - Funk Rock
   defaultMusicTrackIndex: 0
-  defaultMusicVolume: 1
-  defaultSfxVolume: 1
+  defaultMusicVolume: 0.5
+  defaultSfxVolume: 0.5
   sfxMove: {fileID: 8300000, guid: 9a8b83b40fe803849ba07871b470a1db, type: 3}
   sfxRotate: {fileID: 8300000, guid: 9a8b83b40fe803849ba07871b470a1db, type: 3}
   sfxSoftDrop: {fileID: 0}
