@@ -38,6 +38,7 @@ This is a Unity project — it is opened and built through the Unity Editor, not
   - `OptionsMenuUI.cs` — Options sub-panel shown from the pause menu. Provides a Sound button (shows AudioPanel) and a disabled Keybindings placeholder. AudioPanel is a child of OptionsMenuPanel; when showing AudioPanel the parent panel stays active (only AudioPanel is toggled) so AudioPanel's `activeInHierarchy` is true and `SoundPanelEscape` can run. Same `Awake()` initialization pattern as `PauseMenuUI`. Button colors are Inspector-configurable.
   - `SoundPanelEscape.cs` — Tiny shim on the AudioPanel. Routes Escape back to `OptionsMenuUI.OnAudioPanelBack()`. Only active when AudioPanel is active (Unity's `SetActive` semantics).
   - `NextPieceUI.cs` — Displays the next tetromino in a persistent world-space panel to the right of the board. Subscribes to `Board.OnNextTypeChanged` in `OnEnable`/`OnDisable`. `Refresh()` reads `Board.NextType` directly, called in `Start()` to initialise before any events fire. `UpdateDisplay()` repositions four pre-placed `SpriteRenderer` children by computing the bounding-box center of cell offsets and setting each block's `localPosition` to `(cellX − centerX, cellY − centerY)` — 1 world unit per cell, matching the board grid exactly.
+  - `ParallaxLayer.cs` — Auto-scrolls a row of child SpriteRenderer copies leftward at a constant speed, seamlessly recycling copies to the right when they exit the left screen edge. Subscribes to `GameManager.OnPaused`, `OnResumed`, and `OnGameStart` to freeze/unfreeze with the game. `scrollSpeed` (world units/sec) is Inspector-tunable. The left-screen recycle threshold (`recycleX`) is computed once at `Start()` from the perspective camera's FOV, aspect ratio, and the layer's world-z depth. See **Parallax Background** section for the copy-count formula.
 - **`Assets/Project/Input/`** — Input configuration.
   - `TetrisInput.inputactions` — Unity Input System action definitions. Gameplay map: MoveLeft, MoveRight, SoftDrop, HardDrop, RotateClockwise, RotateCounterClockwise. Debug map: ToggleGravity (editor-only). Supports rebinding.
   - `TetrisInput.cs` — Auto-generated C# wrapper (do not edit manually).
@@ -48,6 +49,7 @@ This is a Unity project — it is opened and built through the Unity Editor, not
 - **`Assets/Project/Sound/`** — Audio assets. `Music/` holds looping background tracks (MP3). `SFX/` holds one-shot effect clips (WAV).
 - **`Assets/Project/Prefabs/`** — Reusable prefabs (empty, to be populated).
 - **`Assets/Plugins/Chess Studio/Puzzle Blocks Icon Pack/`** — Asset Store block sprites. Using the "Stone" variants (e.g. `lightBlueStone.png`, `redStone.png`) for tetromino blocks.
+- **`Assets/Plugins/Cyberpunk street/Version 2/`** — Parallax background sprites: `back.png` (112×272 px), `middle.png` (256×272 px), `foreground.png` (688×272 px). All imported at 100 PPU as sprites. At scale (9,9,1) they fill the screen height (~24.5 world units).
 
 ### Scene Structure
 
@@ -70,6 +72,19 @@ Board (world pos 4.5, 9.5)         — SpriteRenderer (tiled Grid.png, 10x20, so
         ├── Block 1
         ├── Block 2
         └── Block 3
+ParallaxBackground (world pos 5, 10, 0) — empty root; z=0 so perspective depth matches board
+  ├── BackLayer      — ParallaxLayer.cs (scrollSpeed=0.5); 6 × back.png copies
+  │     ├── Back_A … Back_F  — SpriteRenderer, sorting layer=Background, order=0
+  │     │                       scale (9,9,1); local x: -25.2, -15.12, -5.04, 5.04, 15.12, 25.2
+  │     │                       material: Sprite-Unlit-Default
+  ├── MiddleLayer    — ParallaxLayer.cs (scrollSpeed=1.2); 3 × middle.png copies
+  │     ├── Middle_A … Middle_C — SpriteRenderer, sorting layer=Background, order=1
+  │     │                         scale (9,9,1); local x: -23.04, 0, 23.04
+  │     │                         material: Sprite-Unlit-Default
+  └── ForegroundLayer — ParallaxLayer.cs (scrollSpeed=2.5); 2 × foreground.png copies
+        ├── Fore_A, Fore_B    — SpriteRenderer, sorting layer=Background, order=2
+                                scale (9,9,1); local x: -30.96, 30.96
+                                material: Sprite-Unlit-Default
 ScoreManager (world pos 0, 0)      — ScoreManager.cs
 SoundManager (world pos 0, 0)      — SoundManager.cs; two AudioSources added at runtime
 EventSystem                        — EventSystem + InputSystemUIInputModule (required for UI clicks)
@@ -264,3 +279,11 @@ The Board's local origin is the center of the grid. Grid bounds are x: -5 to 5, 
 - **Wall kicks:** Each rotation attempt tries 5 offset positions from `Data.WallKicks`. Test 0 is always (0,0). I-piece has its own kick table; J/L/S/T/Z share one.
 - **CCW kicks** are derived by negating offsets of the reverse CW transition.
 - Rotation data is precomputed at static init in `TetrominoData.cs` (`Data.AllRotations`, `Data.WallKicks`).
+
+### Parallax Background
+- Three auto-scrolling layers (back/middle/foreground) create depth via different scroll speeds. The camera never moves; the layers scroll themselves.
+- **Sorting layers** (separate from physics layers): `Background` sorting layer (ID 1473836524, defined in `ProjectSettings/TagManager.asset`) renders behind the `Default` sorting layer. Background sprites use `Sprite-Unlit-Default` material because the scene's Global Light 2D only targets the `Default` sorting layer — lit sprites on `Background` would render black.
+- **Seamless loop formula:** Each layer needs at least `N ≥ screenWidth / spriteWidth + 1` copies so the strip never runs short as copies recycle. At the recycle moment (leftmost copy's right edge = screen left), the rightmost copy must still reach the screen right edge. Current copy counts: back=6, middle=3, foreground=2.
+- **`ParallaxLayer` recycling:** The parent GameObject scrolls left each frame (`transform.position += Vector3.left * speed * dt`). When a child's world-space right edge passes `recycleX` (the left screen edge, computed once at `Start()`), it teleports right by `totalWidth = spriteWidth × copies.Length`. This is world-space arithmetic so it works regardless of parent movement.
+- **Copy positioning:** Center the strip on local x=0. Spacing between copy centers = spriteWidth. First copy center = `−(N−1) × spriteWidth / 2`.
+- **Adding a new layer:** add children to the layer GameObject, ensure copy count satisfies the formula above, use `Sprite-Unlit-Default` material, assign `Background` sorting layer in the SpriteRenderer, wire `GameManager` into the `ParallaxLayer` component.
