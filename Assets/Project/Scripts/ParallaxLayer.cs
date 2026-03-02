@@ -41,9 +41,15 @@ namespace Project.Scripts
 
         private void Start()
         {
-            copies = new Transform[transform.childCount];
-            for (int i = 0; i < copies.Length; i++)
-                copies[i] = transform.GetChild(i);
+            // Collect only children that have a SpriteRenderer (ignores lights, etc.)
+            System.Collections.Generic.List<Transform> spriteChildren = new();
+            for (int i = 0; i < transform.childCount; i++)
+            {
+                Transform child = transform.GetChild(i);
+                if (child.GetComponent<SpriteRenderer>())
+                    spriteChildren.Add(child);
+            }
+            copies = spriteChildren.ToArray();
 
             SpriteRenderer sr = copies[0].GetComponent<SpriteRenderer>();
             spriteWidth = sr.bounds.size.x;
