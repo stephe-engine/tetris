@@ -45,7 +45,7 @@ This is a Unity project — it is opened and built through the Unity Editor, not
 - **`Assets/Project/ScriptableObjects/`** — ScriptableObject assets (spawn strategies, SoundSettings, etc.).
 - **`Assets/Project/Tests/EditMode/`** — EditMode unit tests (NUnit). Tests for `TetrominoData`, `BagRandomStrategy`, `Board`, `Piece`, `GameManager`, and `ScoreManager`.
 - **`Assets/Project/Scenes/Gameplay.unity`** — Main game scene with Board GameObject (at 4.5, 9.5) and 2D camera.
-- **`Assets/Project/Sprites/`** — Game sprites (Grid.png used as tiled board background, PreviewPanel.png used as 9-sliced next-piece preview background).
+- **`Assets/Project/Sprites/`** — Game sprites (Grid.png used as tiled board background, PreviewPanel.png used as 9-sliced next-piece preview background). Also contains `RainSplashMaterial.mat` — custom material used by the Splashes sub-emitter particle system.
 - **`Assets/Project/Sound/`** — Audio assets. `Music/` holds looping background tracks (MP3). `SFX/` holds one-shot effect clips (WAV).
 - **`Assets/Project/Prefabs/`** — Reusable prefabs (empty, to be populated).
 - **`Assets/Plugins/Chess Studio/Puzzle Blocks Icon Pack/`** — Asset Store block sprites. Using the "Stone" variants (e.g. `lightBlueStone.png`, `redStone.png`) for tetromino blocks.
@@ -54,6 +54,11 @@ This is a Unity project — it is opened and built through the Unity Editor, not
 ### Scene Structure
 
 ```
+Default Light 2D (world pos 0, 0)  — Global Light2D; color white, intensity 1.0
+                                     targets Default sorting layer only; shadows off
+Background Light 2D (world pos 5, 10, 0) — Global Light2D; color ~(0.49, 0.77, 0.87), intensity 0.1
+                                     targets Background + Effects sorting layers; shadows on
+                                     simulates dim night-sky ambient for background/rain
 GameManager (world pos 0, 0)       — GameManager.cs + InputHandler.cs
 Board (world pos 4.5, 9.5)         — SpriteRenderer (tiled Grid.png, 10x20, sortingOrder 0)
   ├── NextPiecePanel                — SpriteRenderer (PreviewPanel.png, sortingOrder 0)
@@ -72,6 +77,15 @@ Board (world pos 4.5, 9.5)         — SpriteRenderer (tiled Grid.png, 10x20, so
         ├── Block 1
         ├── Block 2
         └── Block 3
+Rain Effect (world pos 7.5, 19, 0)  — ParticleSystem + ParticleSystemRenderer
+  │   rotated 270° on X (emits downward); 40 particles/sec; box shape 60 units wide
+  │   VelocityOverLifetime: X [−1.5,−1.0], Z [−3.0,−2.5] — angled diagonal fall
+  │   ColorOverLifetime: fade in/out; color ~(0.81, 0.84, 1.0, 0.47) semi-transparent blue
+  │   SizeOverLifetime: separate axes — thin X, elongated Y (raindrop streaks)
+  │   Sorting layer: Effects, material: Sprite-Lit-Default; max 1000 particles, prewarm on
+  └── Splashes              — sub-emitter ParticleSystem (triggered on rain particle death)
+        burst-on-death; TextureSheetAnimation 3-frame splash; sorting layer: Effects
+        material: Assets/Project/Sprites/RainSplashMaterial.mat
 ParallaxBackground (world pos 5, 10, 0) — empty root; z=0 so perspective depth matches board
   ├── BackLayer      — ParallaxLayer.cs (scrollSpeed=0.5); 6 × back.png copies
   │     ├── Back_A … Back_F  — SpriteRenderer, sorting layer=Background, order=0
@@ -282,8 +296,21 @@ The Board's local origin is the center of the grid. Grid bounds are x: -5 to 5, 
 
 ### Parallax Background
 - Three auto-scrolling layers (back/middle/foreground) create depth via different scroll speeds. The camera never moves; the layers scroll themselves.
-- **Sorting layers** (separate from physics layers): `Background` sorting layer (ID 1473836524, defined in `ProjectSettings/TagManager.asset`) renders behind the `Default` sorting layer. Background sprites use `Sprite-Unlit-Default` material because the scene's Global Light 2D only targets the `Default` sorting layer — lit sprites on `Background` would render black.
+- **Sorting layers** (separate from physics layers): Three sorting layers are defined in `ProjectSettings/TagManager.asset`:
+  - `Background` (ID 1473836524) — parallax sprites; renders behind Default
+  - `Default` (ID 0) — board, pieces, UI
+  - `Effects` (ID -1710745637) — rain and splash particles; renders above Default
+- **Lighting per layer:** `Default Light 2D` (white, intensity 1.0) targets only the `Default` layer. `Background Light 2D` (dim blue, intensity 0.1) targets `Background` and `Effects` — so background sprites are lit with a cool night-sky tint and rain particles are also affected by it. Background sprites that should respond to this ambient light use `Sprite-Lit-Default`; if a sprite should ignore lighting entirely, use `Sprite-Unlit-Default` instead.
 - **Seamless loop formula:** Each layer needs at least `N ≥ screenWidth / spriteWidth + 1` copies so the strip never runs short as copies recycle. At the recycle moment (leftmost copy's right edge = screen left), the rightmost copy must still reach the screen right edge. Current copy counts: back=6, middle=3, foreground=2.
 - **`ParallaxLayer` recycling:** The parent GameObject scrolls left each frame (`transform.position += Vector3.left * speed * dt`). When a child's world-space right edge passes `recycleX` (the left screen edge, computed once at `Start()`), it teleports right by `totalWidth = spriteWidth × copies.Length`. This is world-space arithmetic so it works regardless of parent movement.
 - **Copy positioning:** Center the strip on local x=0. Spacing between copy centers = spriteWidth. First copy center = `−(N−1) × spriteWidth / 2`.
-- **Adding a new layer:** add children to the layer GameObject, ensure copy count satisfies the formula above, use `Sprite-Unlit-Default` material, assign `Background` sorting layer in the SpriteRenderer, wire `GameManager` into the `ParallaxLayer` component.
+- **Adding a new layer:** add children to the layer GameObject, ensure copy count satisfies the formula above, assign `Background` sorting layer in the SpriteRenderer, wire `GameManager` into the `ParallaxLayer` component. Use `Sprite-Lit-Default` to be tinted by `Background Light 2D`, or `Sprite-Unlit-Default` to render at full brightness regardless of lighting.
+
+### Rain & Splash Particles
+- **Rain Effect** is a standalone GameObject (not a child of ParallaxBackground). Positioned at (7.5, 19, 0), rotated 270° on X so its local forward points downward in world space.
+- Emission is a 60-unit-wide Box shape covering the screen; 40 particles/sec; prewarm enabled so rain is visible immediately on scene load.
+- Movement via `VelocityOverLifetime` (not `startSpeed`): X [−1.5, −1.0] and Z [−2.5, −3.0] world units/sec give the rain its diagonal fall. The Z velocity maps to vertical screen movement because the emitter's X-rotation maps Z-local to Y-world.
+- `SizeOverLifetime` with `separateAxes` creates thin-wide streaks (raindrop shape).
+- `ColorOverLifetime` fades alpha in and out so drops appear and disappear smoothly.
+- Both `Rain Effect` and `Splashes` use the `Effects` sorting layer (ID -1710745637) and are lit by `Background Light 2D`.
+- **Splashes** is a sub-emitter child of Rain Effect. It has `emissionRate = 0` — it is triggered entirely by bursts when rain particles die. `TextureSheetAnimation` plays a 3-column sprite sheet for the ripple animation. Uses a custom material (`RainSplashMaterial.mat` in `Assets/Project/Sprites/`).
